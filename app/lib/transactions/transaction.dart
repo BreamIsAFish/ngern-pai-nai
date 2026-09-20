@@ -1,11 +1,15 @@
+import '../text/is_within_character_limit.dart';
+
 enum TransactionType {
   income,
-  expense;
+  expense,
+  transfer;
 
   static TransactionType parse(String value) {
     return switch (value) {
       'income' => TransactionType.income,
       'expense' => TransactionType.expense,
+      'transfer' => TransactionType.transfer,
       _ => throw const FormatException('Unsupported transaction type.'),
     };
   }
@@ -13,50 +17,68 @@ enum TransactionType {
 
 class TransactionInput {
   const TransactionInput({
-    required this.occurredAt,
+    required this.date,
+    required this.time,
     required this.type,
-    required this.amount,
-    required this.currency,
     required this.category,
+    required this.tag,
+    required this.amount,
     required this.note,
+    required this.destination,
   });
 
   factory TransactionInput.fromJson(Map<String, dynamic> json) {
-    final occurredAt = DateTime.tryParse(json['occurredAt'] as String? ?? '');
+    final date = (json['date'] as String? ?? '').trim();
+    final time = (json['time'] as String? ?? '').trim();
+    final instant = DateTime.tryParse('${date}T${time}Z');
     final amount = (json['amount'] as num?)?.toDouble();
     final category = (json['category'] as String? ?? '').trim();
-
-    if (occurredAt == null ||
+    final note = (json['note'] as String? ?? '').trim();
+    if (instant == null ||
+        !instant.isUtc ||
+        instant.isAfter(DateTime.now().toUtc()) ||
         amount == null ||
         amount <= 0 ||
-        category.isEmpty) {
+        category.isEmpty ||
+        !isWithinCharacterLimit(value: note, limit: 160)) {
       throw const FormatException('Invalid transaction fields.');
     }
 
+    final type = TransactionType.parse(json['type'] as String? ?? '');
     return TransactionInput(
-      occurredAt: occurredAt,
-      type: TransactionType.parse(json['type'] as String? ?? ''),
+      date: _dateOnly(instant),
+      time: _timeOnly(instant),
+      type: type,
+      category: type == TransactionType.transfer ? 'Transfer' : category,
+      tag: _nullableString(json['tag']),
       amount: amount,
-      currency: (json['currency'] as String? ?? 'THB').trim().toUpperCase(),
-      category: category,
-      note: (json['note'] as String? ?? '').trim(),
+      note: note,
+      destination: _nullableString(json['destination']),
     );
   }
 
   final double amount;
   final String category;
-  final String currency;
+  final String date;
+  final String? destination;
   final String note;
-  final DateTime occurredAt;
+  final String? tag;
+  final String time;
   final TransactionType type;
 
+  DateTime get utcDateTime => DateTime.parse('${date}T${time}Z').toUtc();
+
+  String get utcMonth => '${date.substring(0, 4)}_${date.substring(5, 7)}';
+
   Map<String, dynamic> toJson() => {
-    'occurredAt': _dateOnly(occurredAt),
+    'date': date,
+    'time': time,
     'type': type.name,
-    'amount': amount,
-    'currency': currency,
     'category': category,
+    'tag': tag,
+    'amount': amount,
     'note': note,
+    'destination': destination,
   };
 }
 
@@ -69,20 +91,21 @@ class TransactionRecord {
   });
 
   factory TransactionRecord.fromSheetRow(List<Object?> row) {
-    if (row.length < 9) throw const FormatException('Incomplete sheet row.');
-
+    if (row.length < 11) throw const FormatException('Incomplete sheet row.');
     return TransactionRecord(
       id: row[0].toString(),
       input: TransactionInput.fromJson({
-        'occurredAt': row[1].toString(),
-        'type': row[2].toString(),
-        'amount': double.tryParse(row[3].toString()),
-        'currency': row[4].toString(),
-        'category': row[5].toString(),
-        'note': row[6].toString(),
+        'date': row[1].toString(),
+        'time': row[2].toString(),
+        'type': row[3].toString(),
+        'category': row[4].toString(),
+        'tag': row[5],
+        'amount': double.tryParse(row[6].toString()),
+        'note': row[7].toString(),
+        'destination': row[8],
       }),
-      createdAt: DateTime.parse(row[7].toString()).toUtc(),
-      updatedAt: DateTime.parse(row[8].toString()).toUtc(),
+      createdAt: DateTime.parse(row[9].toString()).toUtc(),
+      updatedAt: DateTime.parse(row[10].toString()).toUtc(),
     );
   }
 
@@ -93,21 +116,23 @@ class TransactionRecord {
 
   List<Object?> toSheetRow() => [
     id,
-    _dateOnly(input.occurredAt),
+    input.date,
+    input.time,
     input.type.name,
-    input.amount,
-    input.currency,
     input.category,
+    input.tag ?? '',
+    input.amount,
     input.note,
-    createdAt.toUtc().toIso8601String(),
-    updatedAt.toUtc().toIso8601String(),
+    input.destination ?? '',
+    createdAt.toIso8601String(),
+    updatedAt.toIso8601String(),
   ];
 
   Map<String, dynamic> toJson() => {
     'id': id,
     ...input.toJson(),
-    'createdAt': createdAt.toUtc().toIso8601String(),
-    'updatedAt': updatedAt.toUtc().toIso8601String(),
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
   };
 }
 
@@ -116,4 +141,16 @@ String _dateOnly(DateTime date) {
   final month = date.month.toString().padLeft(2, '0');
   final day = date.day.toString().padLeft(2, '0');
   return '$year-$month-$day';
+}
+
+String _timeOnly(DateTime date) {
+  final hour = date.hour.toString().padLeft(2, '0');
+  final minute = date.minute.toString().padLeft(2, '0');
+  final second = date.second.toString().padLeft(2, '0');
+  return '$hour:$minute:$second';
+}
+
+String? _nullableString(Object? value) {
+  final text = value?.toString().trim() ?? '';
+  return text.isEmpty ? null : text;
 }

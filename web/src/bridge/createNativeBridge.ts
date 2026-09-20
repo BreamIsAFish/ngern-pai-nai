@@ -2,6 +2,7 @@ import serializeBridgeRequest from './serializeBridgeRequest'
 import type { BridgeClient, BridgeOperation, BridgeOperations, BridgeResponse } from './types'
 
 interface PendingRequest {
+  operation: BridgeOperation
   reject(error: Error): void
   resolve(value: unknown): void
 }
@@ -15,7 +16,8 @@ export default function createNativeBridge(): BridgeClient {
       let response: BridgeResponse
       try {
         response = JSON.parse(message) as BridgeResponse
-      } catch {
+      } catch (error) {
+        console.error('[FlutterBridge] Invalid response JSON.', error)
         return
       }
 
@@ -26,6 +28,10 @@ export default function createNativeBridge(): BridgeClient {
       if (response.ok) {
         request.resolve(response.data)
       } else {
+        console.error(`[FlutterBridge] ${request.operation} failed.`, {
+          code: response.error.code,
+          message: response.error.message,
+        })
         request.reject(new Error(response.error.message))
       }
     },
@@ -44,15 +50,15 @@ export default function createNativeBridge(): BridgeClient {
       })
 
       return new Promise((resolve, reject) => {
-        pending.set(id, { resolve, reject })
+        pending.set(id, { operation, resolve, reject })
         window.FlutterBridge?.postMessage(message)
         window.setTimeout(() => {
           if (!pending.has(id)) return
           pending.delete(id)
+          console.error(`[FlutterBridge] ${operation} timed out.`)
           reject(new Error('The app did not respond. Please try again.'))
         }, 20_000)
       })
     },
   }
 }
-

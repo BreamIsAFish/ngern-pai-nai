@@ -1,103 +1,60 @@
 import { useMemo, useState } from 'react'
-import Icon from '../ui/Icon'
-import type { Transaction, TransactionInput, TransactionType } from './model'
+import CategoryIcon from '../categories/CategoryIcon'
+import CategoryPickerDialog from '../categories/CategoryPickerDialog'
+import type { Category } from '../categories/model'
+import type { Tag } from '../tags/model'
+import type { Transaction, TransactionDraft, TransactionInput, TransactionType } from './model'
+import { draftToUtcInput, localDateValue, localTimeValue, transactionToDraft } from './time'
 import validateTransaction from './validation'
+import Icon from '../ui/Icon'
+import isValidAmountInput from './isValidAmountInput'
 
-interface TransactionFormProps {
-  busy: boolean
-  transaction?: Transaction
-  onCancel?(): void
-  onSubmit?(transaction: TransactionInput): void
-}
+interface Props { busy: boolean; categories: Category[]; initialCategoryPickerOpen?: boolean; initialType?: TransactionType; tags: Tag[]; transaction?: Transaction; onCancel(): void; onSubmit(input: TransactionInput): void; onDelete?(): void; onManageCategories?(): void; onManageTags?(): void }
 
-const categoriesByType: Record<TransactionType, string[]> = {
-  expense: ['Food', 'Transport', 'Shopping', 'Housing', 'Utilities', 'Health', 'Other'],
-  income: ['Salary', 'Freelance', 'Gift', 'Interest', 'Other'],
-}
-
-export default function TransactionForm({ busy, transaction, onCancel, onSubmit }: TransactionFormProps) {
-  const [type, setType] = useState<TransactionType>(transaction?.type ?? 'expense')
+export default function TransactionForm({ busy, categories, initialCategoryPickerOpen = false, initialType = 'expense', tags, transaction, onCancel, onSubmit, onDelete, onManageCategories, onManageTags }: Props) {
+  const initialCategory = initialType === 'transfer' ? 'Transfer' : ''
+  const initial = transaction ? transactionToDraft(transaction) : { localDate: localDateValue(), localTime: localTimeValue(), type: initialType, category: initialCategory, tag: null, amount: 0, note: '', destination: null }
+  const [draft, setDraft] = useState<TransactionDraft>(initial)
   const [amount, setAmount] = useState(transaction ? String(transaction.amount) : '')
-  const [category, setCategory] = useState(transaction?.category ?? 'Food')
-  const [occurredAt, setOccurredAt] = useState(transaction?.occurredAt ?? new Date().toISOString().slice(0, 10))
-  const [note, setNote] = useState(transaction?.note ?? '')
   const [submitted, setSubmitted] = useState(false)
-
-  const input = useMemo<TransactionInput>(() => ({
-    amount: Number(amount),
-    category,
-    currency: 'THB',
-    note: note.trim(),
-    occurredAt,
-    type,
-  }), [amount, category, note, occurredAt, type])
-  const errors = submitted ? validateTransaction(input) : {}
-
-  const chooseType = (nextType: TransactionType) => {
-    setType(nextType)
-    setCategory(categoriesByType[nextType][0])
-  }
-
+  const [menu, setMenu] = useState(false)
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(initialCategoryPickerOpen)
+  const errors = submitted ? validateTransaction({ ...draft, amount: Number(amount) }) : {}
+  const available = useMemo(() => categories.filter((item) => item.type === draft.type), [categories, draft.type])
+  const selectedCategory = available.find((item) => item.name === draft.category)
+  const setType = (type: TransactionType) => setDraft((old) => ({ ...old, type, category: type === 'transfer' ? 'Transfer' : '', tag: type === 'transfer' ? null : old.tag }))
   const submit = () => {
+    const next = { ...draft, amount: Number(amount), category: draft.type === 'transfer' ? 'Transfer' : draft.category }
     setSubmitted(true)
-    if (Object.keys(validateTransaction(input)).length === 0) onSubmit?.(input)
+    if (!Object.keys(validateTransaction(next)).length) onSubmit(draftToUtcInput(next))
   }
-
-  return (
-    <div className="sheet-backdrop" role="presentation">
-      <section aria-labelledby="transaction-form-title" aria-modal="true" className="form-sheet" role="dialog">
-        <header className="form-header">
-          <div>
-            <p className="eyebrow">{transaction ? 'Update entry' : 'New entry'}</p>
-            <h2 id="transaction-form-title">{transaction ? 'Edit transaction' : 'Add transaction'}</h2>
-          </div>
-          <button aria-label="Close" className="icon-button" onClick={onCancel} type="button"><Icon name="close" /></button>
-        </header>
-
-        <div className="type-switch" role="group" aria-label="Transaction type">
-          {(['expense', 'income'] as const).map((value) => (
-            <button
-              className={type === value ? 'active' : ''}
-              key={value}
-              onClick={() => chooseType(value)}
-              type="button"
-            >
-              {value === 'expense' ? 'Expense' : 'Income'}
-            </button>
-          ))}
-        </div>
-
-        <label className="amount-field">
-          <span>Amount</span>
-          <div><small>฿</small><input autoFocus inputMode="decimal" onChange={(event) => setAmount(event.target.value)} placeholder="0" value={amount} /></div>
-          {errors.amount && <em>{errors.amount}</em>}
-        </label>
-
-        <div className="form-grid">
-          <label>
-            <span>Category</span>
-            <select onChange={(event) => setCategory(event.target.value)} value={category}>
-              {categoriesByType[type].map((item) => <option key={item}>{item}</option>)}
-            </select>
-            {errors.category && <em>{errors.category}</em>}
-          </label>
-          <label>
-            <span>Date</span>
-            <input onChange={(event) => setOccurredAt(event.target.value)} type="date" value={occurredAt} />
-            {errors.occurredAt && <em>{errors.occurredAt}</em>}
-          </label>
-        </div>
-
-        <label>
-          <span>Note <small>Optional</small></span>
-          <input maxLength={160} onChange={(event) => setNote(event.target.value)} placeholder="What was this for?" value={note} />
-        </label>
-
-        <button className="button button-primary button-large" disabled={busy} onClick={submit} type="button">
-          {busy ? 'Saving...' : transaction ? 'Save changes' : 'Add transaction'}
-        </button>
-      </section>
+  const confirmDelete = () => { if (onDelete && window.confirm('Delete this transaction? This cannot be undone.')) onDelete() }
+  return <main className="transaction-screen">
+    <header className="entry-header"><button aria-label="Close" onClick={onCancel} type="button"><Icon name="close" size={28} /></button><div className="entry-tabs">{(['expense', 'income', 'transfer'] as const).map((type) => <button className={draft.type === type ? 'active' : ''} key={type} onClick={() => setType(type)} type="button"><b><Icon name={type === 'expense' ? 'arrow-up' : type === 'income' ? 'arrow-down' : 'transfer'} size={24} /></b><span>{type[0].toUpperCase() + type.slice(1)}</span></button>)}</div>{transaction ? <div className="more-wrap"><button aria-label="More" onClick={() => setMenu(!menu)} type="button"><Icon name="more" size={27} /></button>{menu && <button className="delete-menu" onClick={confirmDelete} type="button">Delete transaction</button>}</div> : <span />}</header>
+    <div className="entry-body">
+      <div className="entry-date"><Icon name="calendar" size={23} /><input max={localDateValue()} onChange={(event) => setDraft({ ...draft, localDate: event.target.value })} type="date" value={draft.localDate} /><input onChange={(event) => setDraft({ ...draft, localTime: event.target.value })} type="time" value={draft.localTime} /></div>
+      {errors.localDate && <em className="field-error">{errors.localDate}</em>}
+      <label className={`amount-panel ${draft.type}`}><span><Icon name={draft.type === 'expense' ? 'arrow-up' : draft.type === 'income' ? 'arrow-down' : 'transfer'} size={43} /></span><input aria-invalid={Boolean(errors.amount)} aria-label="Amount" autoComplete="off" autoFocus inputMode="decimal" onChange={(event) => { if (isValidAmountInput(event.target.value)) setAmount(event.target.value) }} pattern="[0-9]*([.][0-9]{0,2})?" placeholder="0" required type="text" value={amount} /><b>฿</b></label>
+      {errors.amount && <em className="field-error">{errors.amount}</em>}
+      {draft.type !== 'transfer' && <button aria-invalid={Boolean(errors.category)} aria-label={draft.category ? `Category, ${draft.category}` : 'Choose category'} className={`category-selection-button ${categoryPickerOpen ? 'open' : ''}`} onClick={() => setCategoryPickerOpen(true)} type="button"><span className="category-selection-icon"><CategoryIcon iconUrl={selectedCategory?.iconUrl ?? null} /></span><span><strong>{draft.category || 'Choose category / tag'}</strong>{draft.tag && <small>#{draft.tag}</small>}</span><Icon name="chevron-right" size={22} /></button>}
+      {errors.category && <em className="field-error">{errors.category}</em>}
+      <label className="note-panel"><span><Icon name="note" /></span><input aria-invalid={Boolean(errors.note)} onChange={(event) => setDraft({ ...draft, note: event.target.value })} placeholder="Add note" value={draft.note} /></label>
+      {errors.note && <em className="field-error">{errors.note}</em>}
+      {draft.type !== 'transfer' && <button className="future-option" disabled title="Coming later" type="button"><Icon name="repeat" /> <span>Schedule again</span><small>Coming later</small></button>}
+      {draft.type === 'transfer' && <p className="transfer-help">Transfers are excluded from income and expense totals. Use them for moving money between accounts.</p>}
     </div>
-  )
+    <button className="save-entry" disabled={busy} onClick={submit} type="button">{busy ? 'Saving…' : 'Save'}</button>
+    {categoryPickerOpen && <CategoryPickerDialog
+      categories={available}
+      onCancel={() => setCategoryPickerOpen(false)}
+      onClearTag={() => setDraft({ ...draft, tag: null })}
+      onManageCategories={() => { setCategoryPickerOpen(false); onManageCategories?.() }}
+      onManageTags={() => { setCategoryPickerOpen(false); onManageTags?.() }}
+      onSelectCategory={(category) => { setDraft({ ...draft, category: category.name }); setCategoryPickerOpen(false) }}
+      onToggleTag={(tag) => setDraft({ ...draft, tag: draft.tag === tag.name ? null : tag.name })}
+      selectedCategory={draft.category}
+      selectedTag={draft.tag}
+      tags={tags}
+    />}
+  </main>
 }
-

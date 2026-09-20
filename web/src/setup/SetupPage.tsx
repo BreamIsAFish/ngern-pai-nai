@@ -13,25 +13,27 @@ export default function SetupPage({ busy, error, onConnect }: SetupPageProps) {
       <div className="setup-ambient setup-ambient-two" />
       <section className="setup-content">
         <div className="brand-lockup">
-          <div className="brand-mark">N</div>
+          <div className="brand-mark">฿</div>
           <span>Ngern Pai Nai</span>
         </div>
 
         <div className="setup-copy">
-          <p className="eyebrow">Your money. Your sheet.</p>
-          <h1>Know where your money went.</h1>
+          <p className="eyebrow">Your friendly money journal</p>
+          <h1>Let’s follow your money trail.</h1>
           <p className="setup-intro">
-            Track income and spending in a private Google Sheet that only your account can access.
+            Jot down income and spending, then keep every entry in your own Google Sheet.
           </p>
         </div>
 
         <div className="setup-illustration" aria-hidden="true">
-          <div className="paper paper-back" />
-          <div className="paper paper-front">
-            <span className="paper-line wide" />
-            <span className="paper-line" />
-            <span className="paper-line short" />
-            <div className="paper-coin">฿</div>
+          <div className="welcome-cat">
+            <span className="welcome-cat-face">•ᴗ•</span>
+            <span className="welcome-cat-paw">฿</span>
+          </div>
+          <div className="receipt-card">
+            <span />
+            <span />
+            <strong>฿ 1,240</strong>
           </div>
         </div>
 
@@ -39,11 +41,10 @@ export default function SetupPage({ busy, error, onConnect }: SetupPageProps) {
 
         <button className="button button-primary button-large" disabled={busy} onClick={onConnect} type="button">
           <Icon name="sheet" />
-          {busy ? 'Connecting...' : 'Continue with Google'}
+          {busy ? 'Connecting...' : 'Start with Google'}
         </button>
-        <p className="privacy-note">We request access only to files this app creates.</p>
+        <p className="privacy-note">Your transactions stay in your Google Sheet.</p>
       </section>
     </main>
   )
 }
-

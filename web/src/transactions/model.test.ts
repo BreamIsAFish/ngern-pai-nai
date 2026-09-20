@@ -5,7 +5,8 @@ describe('mapTransaction', () => {
   it('normalizes a valid bridge row into a transaction', () => {
     expect(mapTransaction({
       id: 'tx-1',
-      occurredAt: '2026-09-17',
+      date: '2026-09-17',
+      time: '04:30:00',
       type: 'expense',
       amount: '120.50',
       category: 'Food',
@@ -13,15 +14,17 @@ describe('mapTransaction', () => {
     })).toMatchObject({
       id: 'tx-1',
       amount: 120.5,
-      currency: 'THB',
       type: 'expense',
     })
   })
 
   it('rejects an unsupported transaction type', () => {
-    expect(() => mapTransaction({ type: 'transfer', amount: 10 })).toThrow(
+    expect(() => mapTransaction({ type: 'refund', amount: 10 })).toThrow(
       'Transaction data is invalid.',
     )
   })
-})
 
+  it('accepts transfers', () => {
+    expect(mapTransaction({ date: '2026-09-17', time: '00:00:00', type: 'transfer', amount: 10 }).type).toBe('transfer')
+  })
+})

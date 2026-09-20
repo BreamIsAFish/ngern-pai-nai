@@ -5,23 +5,27 @@ void main() {
   group('TransactionInput', () {
     test('maps a valid bridge payload to a typed transaction', () {
       final transaction = TransactionInput.fromJson({
-        'occurredAt': '2026-09-17',
+        'date': '2025-09-17',
+        'time': '05:30:00',
         'type': 'expense',
         'amount': 120.5,
-        'currency': 'thb',
         'category': 'Food',
+        'tag': '',
         'note': 'Lunch',
+        'destination': '',
       });
 
       expect(transaction.amount, 120.5);
-      expect(transaction.currency, 'THB');
       expect(transaction.type, TransactionType.expense);
+      expect(transaction.tag, isNull);
+      expect(transaction.destination, isNull);
     });
 
     test('rejects zero amounts and missing categories', () {
       expect(
         () => TransactionInput.fromJson({
-          'occurredAt': '2026-09-17',
+          'date': '2025-09-17',
+          'time': '05:30:00',
           'type': 'expense',
           'amount': 0,
           'category': '',
@@ -29,20 +33,40 @@ void main() {
         throwsFormatException,
       );
     });
+
+    test('preserves Thai category, tag, and note text', () {
+      final transaction = TransactionInput.fromJson({
+        'date': '2025-09-17',
+        'time': '05:30:00',
+        'type': 'expense',
+        'amount': 120.5,
+        'category': 'อาหาร',
+        'tag': 'รายเดือน',
+        'note': 'ข้าวกลางวันกับแม่',
+        'destination': '',
+      });
+
+      expect(transaction.category, 'อาหาร');
+      expect(transaction.tag, 'รายเดือน');
+      expect(transaction.note, 'ข้าวกลางวันกับแม่');
+      expect(transaction.toJson(), containsPair('note', 'ข้าวกลางวันกับแม่'));
+    });
   });
 
   group('TransactionRecord', () {
     test('maps a sheet row to the safe web response shape', () {
       final record = TransactionRecord.fromSheetRow([
         'tx-1',
-        '2026-09-17',
+        '2025-09-17',
+        '05:30:00',
         'income',
-        '500',
-        'THB',
         'Gift',
+        '',
+        '500',
         'Birthday',
-        '2026-09-17T01:00:00.000Z',
-        '2026-09-17T02:00:00.000Z',
+        '',
+        '2025-09-17T01:00:00.000Z',
+        '2025-09-17T02:00:00.000Z',
       ]);
 
       expect(record.toJson(), containsPair('id', 'tx-1'));

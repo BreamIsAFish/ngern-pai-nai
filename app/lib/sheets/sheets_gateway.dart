@@ -3,7 +3,11 @@ import 'package:googleapis/sheets/v4.dart' as sheets;
 import 'package:uuid/uuid.dart';
 
 import '../auth/google_auth_service.dart';
+import '../categories/category.dart';
+import '../categories/default_categories.dart';
+import '../categories/reconcile_default_categories.dart';
 import '../storage/spreadsheet_store.dart';
+import '../tags/tag.dart';
 import '../transactions/transaction.dart';
 
 class SheetsGateway {
@@ -15,51 +19,76 @@ class SheetsGateway {
        _store = store,
        _uuid = uuid;
 
-  static const spreadsheetName = 'Ngern Pai Nai';
-  static const worksheetName = 'Transactions';
-  static const _headers = [
+  static const spreadsheetName = 'NgernPaiNai_data';
+  static const categoriesSheet = 'Categories';
+  static const tagsSheet = 'Tags';
+  static const metadataSheet = '_Metadata';
+  static const schemaVersion = '2';
+  static const transactionHeaders = [
     'id',
-    'occurred_at',
+    'date',
+    'time',
     'type',
-    'amount',
-    'currency',
     'category',
+    'tag',
+    'amount',
     'note',
+    'destination',
     'created_at',
     'updated_at',
   ];
+  static const categoryHeaders = [
+    'id',
+    'name',
+    'type',
+    'icon_url',
+    'is_default',
+    'created_at',
+    'updated_at',
+  ];
+  static const tagHeaders = ['id', 'name', 'created_at', 'updated_at'];
 
   final GoogleAuthService _auth;
   final SpreadsheetStore _store;
   final Uuid _uuid;
 
-  Future<bool> hasStoredSpreadsheet(String accountId) async {
-    return await _store.read(accountId) != null;
-  }
+  Future<bool> hasStoredSpreadsheet(String accountId) async =>
+      await _store.read(accountId) != null;
+
+  Future<String?> storedSpreadsheetId(String accountId) =>
+      _store.read(accountId);
+
+  static String spreadsheetUrl(String spreadsheetId) =>
+      'https://docs.google.com/spreadsheets/d/$spreadsheetId/edit';
 
   Future<String> bootstrap() async {
     final account = _auth.currentAccount ?? await _auth.restoreSession();
     if (account == null) throw const GoogleAuthRequired();
-
     final client = await _auth.authenticatedClient();
     try {
-      final sheetsApi = sheets.SheetsApi(client);
+      final api = sheets.SheetsApi(client);
+      final driveApi = drive.DriveApi(client);
       var spreadsheetId = await _store.read(account.id);
-
       if (spreadsheetId != null) {
         try {
-          await sheetsApi.spreadsheets.get(spreadsheetId);
-          await _ensureWorksheet(sheetsApi, spreadsheetId);
-          return spreadsheetId;
+          final file =
+              await driveApi.files.get(
+                    spreadsheetId,
+                    $fields: 'id,name,mimeType,trashed',
+                  )
+                  as drive.File;
+          if (isFileTrashed(file)) throw SpreadsheetTrashed(spreadsheetId);
+          await api.spreadsheets.get(spreadsheetId);
+        } on SpreadsheetTrashed {
+          rethrow;
         } catch (_) {
           await _store.delete(account.id);
           spreadsheetId = null;
         }
       }
-
-      spreadsheetId = await _findSpreadsheet(drive.DriveApi(client));
-      spreadsheetId ??= await _createSpreadsheet(sheetsApi);
-      await _ensureWorksheet(sheetsApi, spreadsheetId);
+      spreadsheetId ??= await _findSpreadsheet(driveApi);
+      spreadsheetId ??= await _createSpreadsheet(api);
+      await _initializeSchema(api, spreadsheetId);
       await _store.write(accountId: account.id, spreadsheetId: spreadsheetId);
       return spreadsheetId;
     } finally {
@@ -67,25 +96,81 @@ class SheetsGateway {
     }
   }
 
-  Future<List<TransactionRecord>> listTransactions() async {
+  Future<String> restoreStoredSpreadsheet() async {
+    final account = _auth.currentAccount ?? await _auth.restoreSession();
+    if (account == null) throw const GoogleAuthRequired();
+    final spreadsheetId = await _store.read(account.id);
+    if (spreadsheetId == null) throw const SheetNotReady();
+    final client = await _auth.authenticatedClient();
+    try {
+      await drive.DriveApi(client).files.update(
+        drive.File(trashed: false),
+        spreadsheetId,
+        $fields: 'id,trashed',
+      );
+    } finally {
+      client.close();
+    }
+    return bootstrap();
+  }
+
+  Future<String> createReplacementSpreadsheet() async {
+    final account = _auth.currentAccount ?? await _auth.restoreSession();
+    if (account == null) throw const GoogleAuthRequired();
+    final client = await _auth.authenticatedClient();
+    try {
+      final api = sheets.SheetsApi(client);
+      final spreadsheetId = await _createSpreadsheet(api);
+      await _initializeSchema(api, spreadsheetId);
+      await _store.write(accountId: account.id, spreadsheetId: spreadsheetId);
+      return spreadsheetId;
+    } finally {
+      client.close();
+    }
+  }
+
+  static bool isFileTrashed(drive.File file) => file.trashed ?? false;
+
+  Future<TransactionListResult> listTransactions(List<String> utcMonths) async {
+    if (utcMonths.isEmpty ||
+        utcMonths.length > 12 ||
+        utcMonths.any((month) => !_validMonth(month))) {
+      throw const FormatException('Invalid month range.');
+    }
     final spreadsheetId = await _requireSpreadsheetId();
     final client = await _auth.authenticatedClient();
     try {
-      final result = await sheets.SheetsApi(
-        client,
-      ).spreadsheets.values.get(spreadsheetId, '$worksheetName!A2:I');
-
+      final api = sheets.SheetsApi(client);
+      final spreadsheet = await api.spreadsheets.get(spreadsheetId);
+      final titles =
+          spreadsheet.sheets
+              ?.map((sheet) => sheet.properties?.title)
+              .whereType<String>()
+              .toSet() ??
+          <String>{};
       final records = <TransactionRecord>[];
-      for (final row in result.values ?? const <List<Object?>>[]) {
-        if (row.isEmpty || row.first.toString().isEmpty) continue;
-        try {
-          records.add(TransactionRecord.fromSheetRow(row));
-        } on FormatException {
-          continue;
+      var skippedRows = 0;
+      for (final month in utcMonths.toSet()) {
+        final title = transactionSheet(month);
+        if (!titles.contains(title)) continue;
+        await _validateHeader(api, spreadsheetId, title, transactionHeaders);
+        final result = await api.spreadsheets.values.get(
+          spreadsheetId,
+          '$title!A2:K',
+        );
+        for (final row in result.values ?? const <List<Object?>>[]) {
+          if (row.isEmpty || row.first.toString().isEmpty) continue;
+          try {
+            records.add(TransactionRecord.fromSheetRow(row));
+          } on FormatException {
+            skippedRows++;
+          }
         }
       }
-      records.sort((a, b) => b.input.occurredAt.compareTo(a.input.occurredAt));
-      return records;
+      records.sort(
+        (a, b) => b.input.utcDateTime.compareTo(a.input.utcDateTime),
+      );
+      return TransactionListResult(records: records, skippedRows: skippedRows);
     } finally {
       client.close();
     }
@@ -102,10 +187,13 @@ class SheetsGateway {
     );
     final client = await _auth.authenticatedClient();
     try {
-      await sheets.SheetsApi(client).spreadsheets.values.append(
+      final api = sheets.SheetsApi(client);
+      final title = transactionSheet(input.utcMonth);
+      await _ensureWorksheet(api, spreadsheetId, title, transactionHeaders);
+      await api.spreadsheets.values.append(
         sheets.ValueRange(values: [record.toSheetRow()]),
         spreadsheetId,
-        '$worksheetName!A:I',
+        '$title!A:K',
         valueInputOption: 'RAW',
         insertDataOption: 'INSERT_ROWS',
       );
@@ -117,73 +205,412 @@ class SheetsGateway {
 
   Future<TransactionRecord> updateTransaction({
     required String id,
+    required String sourceUtcMonth,
     required TransactionInput input,
   }) async {
+    if (!_validMonth(sourceUtcMonth)) {
+      throw const FormatException('Invalid source month.');
+    }
     final spreadsheetId = await _requireSpreadsheetId();
     final client = await _auth.authenticatedClient();
     try {
       final api = sheets.SheetsApi(client);
+      final sourceTitle = transactionSheet(sourceUtcMonth);
+      await _validateHeader(
+        api,
+        spreadsheetId,
+        sourceTitle,
+        transactionHeaders,
+      );
       final rows = await api.spreadsheets.values.get(
         spreadsheetId,
-        '$worksheetName!A2:I',
+        '$sourceTitle!A2:K',
       );
-      final match = _findRecord(rows.values, id);
+      final match = _findTransaction(rows.values, id);
       final updated = TransactionRecord(
         id: id,
         input: input,
         createdAt: match.record.createdAt,
         updatedAt: DateTime.now().toUtc(),
       );
-      await api.spreadsheets.values.update(
-        sheets.ValueRange(values: [updated.toSheetRow()]),
-        spreadsheetId,
-        '$worksheetName!A${match.rowNumber}:I${match.rowNumber}',
-        valueInputOption: 'RAW',
-      );
+      final targetTitle = transactionSheet(input.utcMonth);
+      if (sourceTitle == targetTitle) {
+        await api.spreadsheets.values.update(
+          sheets.ValueRange(values: [updated.toSheetRow()]),
+          spreadsheetId,
+          '$sourceTitle!A${match.rowNumber}:K${match.rowNumber}',
+          valueInputOption: 'RAW',
+        );
+      } else {
+        await _ensureWorksheet(
+          api,
+          spreadsheetId,
+          targetTitle,
+          transactionHeaders,
+        );
+        await api.spreadsheets.values.append(
+          sheets.ValueRange(values: [updated.toSheetRow()]),
+          spreadsheetId,
+          '$targetTitle!A:K',
+          valueInputOption: 'RAW',
+          insertDataOption: 'INSERT_ROWS',
+        );
+        await _deleteRow(
+          api: api,
+          spreadsheetId: spreadsheetId,
+          sheetTitle: sourceTitle,
+          rowNumber: match.rowNumber,
+        );
+      }
       return updated;
     } finally {
       client.close();
     }
   }
 
-  Future<void> deleteTransaction(String id) async {
+  Future<void> deleteTransaction({
+    required String id,
+    required String utcMonth,
+  }) async {
+    if (!_validMonth(utcMonth)) throw const FormatException('Invalid month.');
     final spreadsheetId = await _requireSpreadsheetId();
     final client = await _auth.authenticatedClient();
     try {
       final api = sheets.SheetsApi(client);
+      final title = transactionSheet(utcMonth);
+      await _validateHeader(api, spreadsheetId, title, transactionHeaders);
       final rows = await api.spreadsheets.values.get(
         spreadsheetId,
-        '$worksheetName!A2:I',
+        '$title!A2:K',
       );
-      final match = _findRecord(rows.values, id);
-      final spreadsheet = await api.spreadsheets.get(spreadsheetId);
-      final sheetId = spreadsheet.sheets
-          ?.where((sheet) => sheet.properties?.title == worksheetName)
-          .firstOrNull
-          ?.properties
-          ?.sheetId;
-      if (sheetId == null) throw const SheetNotReady();
-
-      await api.spreadsheets.batchUpdate(
-        sheets.BatchUpdateSpreadsheetRequest(
-          requests: [
-            sheets.Request(
-              deleteDimension: sheets.DeleteDimensionRequest(
-                range: sheets.DimensionRange(
-                  dimension: 'ROWS',
-                  sheetId: sheetId,
-                  startIndex: match.rowNumber - 1,
-                  endIndex: match.rowNumber,
-                ),
-              ),
-            ),
-          ],
-        ),
-        spreadsheetId,
+      final match = _findTransaction(rows.values, id);
+      await _deleteRow(
+        api: api,
+        spreadsheetId: spreadsheetId,
+        sheetTitle: title,
+        rowNumber: match.rowNumber,
       );
     } finally {
       client.close();
     }
+  }
+
+  Future<List<CategoryRecord>> listCategories() async {
+    final rows = await _readRows(
+      categoriesSheet,
+      'A2:G',
+      headers: categoryHeaders,
+    );
+    return rows
+        .where((row) => row.isNotEmpty)
+        .map(CategoryRecord.fromSheetRow)
+        .toList();
+  }
+
+  Future<CategoryRecord> createCategory(CategoryInput input) async {
+    if (input.type == TransactionType.transfer) {
+      throw const FormatException('Transfer category is fixed.');
+    }
+    final existing = await listCategories();
+    _assertUniqueName(name: input.name, type: input.type, categories: existing);
+    if (existing
+            .where(
+              (category) => !category.isDefault && category.type == input.type,
+            )
+            .length >=
+        50) {
+      throw const ItemLimitReached();
+    }
+    final now = DateTime.now().toUtc();
+    final category = CategoryRecord(
+      id: _uuid.v4(),
+      name: input.name,
+      type: input.type,
+      iconUrl: input.iconUrl,
+      isDefault: false,
+      createdAt: now,
+      updatedAt: now,
+    );
+    await _appendRow(categoriesSheet, 'A:G', category.toSheetRow());
+    return category;
+  }
+
+  Future<CategoryRecord> updateCategory({
+    required String id,
+    required CategoryInput input,
+  }) async {
+    if (input.type == TransactionType.transfer) {
+      throw const FormatException('Transfer category is fixed.');
+    }
+    final rows = await _readRows(
+      categoriesSheet,
+      'A2:G',
+      headers: categoryHeaders,
+    );
+    final match = _findCategory(rows, id);
+    if (match.record.isDefault) throw const ItemLocked();
+    final categories = rows
+        .where((row) => row.isNotEmpty)
+        .map(CategoryRecord.fromSheetRow)
+        .toList();
+    _assertUniqueName(
+      name: input.name,
+      type: input.type,
+      categories: categories,
+      ignoredId: id,
+    );
+    final updated = CategoryRecord(
+      id: id,
+      name: input.name,
+      type: input.type,
+      iconUrl: input.iconUrl,
+      isDefault: false,
+      createdAt: match.record.createdAt,
+      updatedAt: DateTime.now().toUtc(),
+    );
+    await _updateRow(
+      categoriesSheet,
+      'A',
+      'G',
+      match.rowNumber,
+      updated.toSheetRow(),
+    );
+    return updated;
+  }
+
+  Future<void> deleteCategory(String id) async {
+    final rows = await _readRows(
+      categoriesSheet,
+      'A2:G',
+      headers: categoryHeaders,
+    );
+    final match = _findCategory(rows, id);
+    if (match.record.isDefault) throw const ItemLocked();
+    await _deleteKnownRow(categoriesSheet, match.rowNumber);
+  }
+
+  Future<List<TagRecord>> listTags() async {
+    final rows = await _readRows(tagsSheet, 'A2:D', headers: tagHeaders);
+    return rows
+        .where((row) => row.isNotEmpty)
+        .map(TagRecord.fromSheetRow)
+        .toList();
+  }
+
+  Future<TagRecord> createTag(TagInput input) async {
+    final existing = await listTags();
+    if (existing.length >= 100) throw const ItemLimitReached();
+    _assertUniqueTag(input.name, existing);
+    final now = DateTime.now().toUtc();
+    final tag = TagRecord(
+      id: _uuid.v4(),
+      name: input.name,
+      createdAt: now,
+      updatedAt: now,
+    );
+    await _appendRow(tagsSheet, 'A:D', tag.toSheetRow());
+    return tag;
+  }
+
+  Future<TagRecord> updateTag({
+    required String id,
+    required TagInput input,
+  }) async {
+    final rows = await _readRows(tagsSheet, 'A2:D', headers: tagHeaders);
+    final match = _findTag(rows, id);
+    final tags = rows
+        .where((row) => row.isNotEmpty)
+        .map(TagRecord.fromSheetRow)
+        .toList();
+    _assertUniqueTag(input.name, tags, ignoredId: id);
+    final updated = TagRecord(
+      id: id,
+      name: input.name,
+      createdAt: match.record.createdAt,
+      updatedAt: DateTime.now().toUtc(),
+    );
+    await _updateRow(
+      tagsSheet,
+      'A',
+      'D',
+      match.rowNumber,
+      updated.toSheetRow(),
+    );
+    return updated;
+  }
+
+  Future<void> deleteTag(String id) async {
+    final rows = await _readRows(tagsSheet, 'A2:D', headers: tagHeaders);
+    final match = _findTag(rows, id);
+    await _deleteKnownRow(tagsSheet, match.rowNumber);
+  }
+
+  static String transactionSheet(String utcMonth) => 'Transactions_$utcMonth';
+
+  Future<void> _initializeSchema(
+    sheets.SheetsApi api,
+    String spreadsheetId,
+  ) async {
+    final spreadsheet = await api.spreadsheets.get(spreadsheetId);
+    final hasMetadata =
+        spreadsheet.sheets?.any(
+          (sheet) => sheet.properties?.title == metadataSheet,
+        ) ??
+        false;
+    String? version;
+    if (hasMetadata) {
+      final values = await api.spreadsheets.values.get(
+        spreadsheetId,
+        '$metadataSheet!A1:B3',
+      );
+      for (final row in values.values ?? const <List<Object?>>[]) {
+        if (row.length >= 2 && row[0].toString() == 'schema_version') {
+          version = row[1].toString();
+        }
+      }
+    }
+    if (version != schemaVersion) {
+      await _resetSchema(api, spreadsheetId, hasMetadata: hasMetadata);
+      return;
+    }
+    await _ensureWorksheet(
+      api,
+      spreadsheetId,
+      categoriesSheet,
+      categoryHeaders,
+    );
+    await _reconcileDefaultCategoryRows(api, spreadsheetId);
+    await _ensureWorksheet(api, spreadsheetId, tagsSheet, tagHeaders);
+    await _ensureWorksheet(
+      api,
+      spreadsheetId,
+      transactionSheet(_currentUtcMonth()),
+      transactionHeaders,
+    );
+  }
+
+  Future<void> _reconcileDefaultCategoryRows(
+    sheets.SheetsApi api,
+    String spreadsheetId,
+  ) async {
+    final rows =
+        (await api.spreadsheets.values.get(
+          spreadsheetId,
+          '$categoriesSheet!A2:G',
+        )).values ??
+        <List<Object?>>[];
+    final records = <CategoryRecord>[];
+    final rowNumbers = <int>[];
+    for (var index = 0; index < rows.length; index++) {
+      if (rows[index].isEmpty) continue;
+      records.add(CategoryRecord.fromSheetRow(rows[index]));
+      rowNumbers.add(index + 2);
+    }
+    final reconciliation = reconcileDefaultCategories(
+      existing: records,
+      updatedAt: DateTime.now().toUtc(),
+    );
+    final appendedRows = <List<Object?>>[];
+    for (final index in reconciliation.changedIndexes) {
+      final record = reconciliation.records[index];
+      if (index >= rowNumbers.length) {
+        appendedRows.add(record.toSheetRow());
+        continue;
+      }
+      final rowNumber = rowNumbers[index];
+      await api.spreadsheets.values.update(
+        sheets.ValueRange(values: [record.toSheetRow()]),
+        spreadsheetId,
+        '$categoriesSheet!A$rowNumber:G$rowNumber',
+        valueInputOption: 'RAW',
+      );
+    }
+    if (appendedRows.isEmpty) return;
+    await api.spreadsheets.values.append(
+      sheets.ValueRange(values: appendedRows),
+      spreadsheetId,
+      '$categoriesSheet!A:G',
+      valueInputOption: 'RAW',
+      insertDataOption: 'INSERT_ROWS',
+    );
+  }
+
+  Future<void> _resetSchema(
+    sheets.SheetsApi api,
+    String spreadsheetId, {
+    required bool hasMetadata,
+  }) async {
+    if (!hasMetadata) {
+      await _addSheet(api, spreadsheetId, metadataSheet);
+    }
+    await _setSheetHidden(api, spreadsheetId, metadataSheet, hidden: false);
+    var spreadsheet = await api.spreadsheets.get(spreadsheetId);
+    final obsolete =
+        spreadsheet.sheets
+            ?.where((sheet) {
+              final title = sheet.properties?.title ?? '';
+              return title == 'Transactions' ||
+                  title == categoriesSheet ||
+                  title == tagsSheet ||
+                  title.startsWith('Transactions_');
+            })
+            .map((sheet) => sheet.properties?.sheetId)
+            .whereType<int>()
+            .toList() ??
+        <int>[];
+    if (obsolete.isNotEmpty) {
+      await api.spreadsheets.batchUpdate(
+        sheets.BatchUpdateSpreadsheetRequest(
+          requests: obsolete
+              .map(
+                (id) => sheets.Request(
+                  deleteSheet: sheets.DeleteSheetRequest(sheetId: id),
+                ),
+              )
+              .toList(),
+        ),
+        spreadsheetId,
+      );
+    }
+    await api.spreadsheets.values.clear(
+      sheets.ClearValuesRequest(),
+      spreadsheetId,
+      '$metadataSheet!A:B',
+    );
+    await api.spreadsheets.values.update(
+      sheets.ValueRange(
+        values: [
+          ['key', 'value'],
+          ['schema_version', schemaVersion],
+          ['initialized_at', DateTime.now().toUtc().toIso8601String()],
+        ],
+      ),
+      spreadsheetId,
+      '$metadataSheet!A1:B3',
+      valueInputOption: 'RAW',
+    );
+    await _addSheet(api, spreadsheetId, categoriesSheet);
+    await _addSheet(api, spreadsheetId, tagsSheet);
+    await _addSheet(api, spreadsheetId, transactionSheet(_currentUtcMonth()));
+    await _writeHeader(api, spreadsheetId, categoriesSheet, categoryHeaders);
+    await _writeHeader(api, spreadsheetId, tagsSheet, tagHeaders);
+    await _writeHeader(
+      api,
+      spreadsheetId,
+      transactionSheet(_currentUtcMonth()),
+      transactionHeaders,
+    );
+    await api.spreadsheets.values.update(
+      sheets.ValueRange(
+        values: createDefaultCategories(
+          DateTime.now().toUtc(),
+        ).map((category) => category.toSheetRow()).toList(),
+      ),
+      spreadsheetId,
+      '$categoriesSheet!A2:G',
+      valueInputOption: 'RAW',
+    );
+    await _setSheetHidden(api, spreadsheetId, metadataSheet, hidden: true);
   }
 
   Future<String?> _findSpreadsheet(drive.DriveApi driveApi) async {
@@ -202,7 +629,10 @@ class SheetsGateway {
         properties: sheets.SpreadsheetProperties(title: spreadsheetName),
         sheets: [
           sheets.Sheet(
-            properties: sheets.SheetProperties(title: worksheetName),
+            properties: sheets.SheetProperties(
+              title: metadataSheet,
+              hidden: false,
+            ),
           ),
         ],
       ),
@@ -216,42 +646,207 @@ class SheetsGateway {
   Future<void> _ensureWorksheet(
     sheets.SheetsApi api,
     String spreadsheetId,
+    String title,
+    List<String> headers,
   ) async {
-    var spreadsheet = await api.spreadsheets.get(spreadsheetId);
+    final spreadsheet = await api.spreadsheets.get(spreadsheetId);
     final exists =
-        spreadsheet.sheets?.any(
-          (sheet) => sheet.properties?.title == worksheetName,
-        ) ??
+        spreadsheet.sheets?.any((sheet) => sheet.properties?.title == title) ??
         false;
-
     if (!exists) {
-      await api.spreadsheets.batchUpdate(
-        sheets.BatchUpdateSpreadsheetRequest(
-          requests: [
-            sheets.Request(
-              addSheet: sheets.AddSheetRequest(
-                properties: sheets.SheetProperties(title: worksheetName),
+      await _addSheet(api, spreadsheetId, title);
+      await _writeHeader(api, spreadsheetId, title, headers);
+      return;
+    }
+    await _validateHeader(api, spreadsheetId, title, headers);
+  }
+
+  Future<void> _validateHeader(
+    sheets.SheetsApi api,
+    String spreadsheetId,
+    String title,
+    List<String> headers,
+  ) async {
+    final end = _columnFor(headers.length);
+    final result = await api.spreadsheets.values.get(
+      spreadsheetId,
+      '$title!A1:${end}1',
+    );
+    if (result.values?.firstOrNull
+            ?.map((value) => value.toString())
+            .join(',') !=
+        headers.join(',')) {
+      throw SheetFormatInvalid(title);
+    }
+  }
+
+  Future<void> _addSheet(
+    sheets.SheetsApi api,
+    String spreadsheetId,
+    String title, {
+    bool hidden = false,
+  }) async {
+    await api.spreadsheets.batchUpdate(
+      sheets.BatchUpdateSpreadsheetRequest(
+        requests: [
+          sheets.Request(
+            addSheet: sheets.AddSheetRequest(
+              properties: sheets.SheetProperties(title: title, hidden: hidden),
+            ),
+          ),
+        ],
+      ),
+      spreadsheetId,
+    );
+  }
+
+  Future<void> _setSheetHidden(
+    sheets.SheetsApi api,
+    String spreadsheetId,
+    String title, {
+    required bool hidden,
+  }) async {
+    final spreadsheet = await api.spreadsheets.get(spreadsheetId);
+    final sheetId = spreadsheet.sheets
+        ?.where((sheet) => sheet.properties?.title == title)
+        .firstOrNull
+        ?.properties
+        ?.sheetId;
+    if (sheetId == null) throw const SheetNotReady();
+    await api.spreadsheets.batchUpdate(
+      sheets.BatchUpdateSpreadsheetRequest(
+        requests: [
+          sheets.Request(
+            updateSheetProperties: sheets.UpdateSheetPropertiesRequest(
+              fields: 'hidden',
+              properties: sheets.SheetProperties(
+                sheetId: sheetId,
+                hidden: hidden,
               ),
             ),
-          ],
-        ),
-        spreadsheetId,
-      );
-      spreadsheet = await api.spreadsheets.get(spreadsheetId);
-    }
-
-    final header = await api.spreadsheets.values.get(
+          ),
+        ],
+      ),
       spreadsheetId,
-      '$worksheetName!A1:I1',
     );
-    if (header.values?.firstOrNull?.join(',') != _headers.join(',')) {
-      await api.spreadsheets.values.update(
-        sheets.ValueRange(values: [_headers]),
+  }
+
+  Future<void> _writeHeader(
+    sheets.SheetsApi api,
+    String spreadsheetId,
+    String title,
+    List<String> headers,
+  ) async {
+    await api.spreadsheets.values.update(
+      sheets.ValueRange(values: [headers]),
+      spreadsheetId,
+      '$title!A1:${_columnFor(headers.length)}1',
+      valueInputOption: 'RAW',
+    );
+  }
+
+  Future<List<List<Object?>>> _readRows(
+    String sheet,
+    String range, {
+    required List<String> headers,
+  }) async {
+    final spreadsheetId = await _requireSpreadsheetId();
+    final client = await _auth.authenticatedClient();
+    try {
+      final api = sheets.SheetsApi(client);
+      await _validateHeader(api, spreadsheetId, sheet, headers);
+      return (await api.spreadsheets.values.get(
+            spreadsheetId,
+            '$sheet!$range',
+          )).values ??
+          <List<Object?>>[];
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<void> _appendRow(String sheet, String range, List<Object?> row) async {
+    final spreadsheetId = await _requireSpreadsheetId();
+    final client = await _auth.authenticatedClient();
+    try {
+      await sheets.SheetsApi(client).spreadsheets.values.append(
+        sheets.ValueRange(values: [row]),
         spreadsheetId,
-        '$worksheetName!A1:I1',
+        '$sheet!$range',
+        valueInputOption: 'RAW',
+        insertDataOption: 'INSERT_ROWS',
+      );
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<void> _updateRow(
+    String sheet,
+    String firstColumn,
+    String lastColumn,
+    int rowNumber,
+    List<Object?> row,
+  ) async {
+    final spreadsheetId = await _requireSpreadsheetId();
+    final client = await _auth.authenticatedClient();
+    try {
+      await sheets.SheetsApi(client).spreadsheets.values.update(
+        sheets.ValueRange(values: [row]),
+        spreadsheetId,
+        '$sheet!$firstColumn$rowNumber:$lastColumn$rowNumber',
         valueInputOption: 'RAW',
       );
+    } finally {
+      client.close();
     }
+  }
+
+  Future<void> _deleteKnownRow(String sheet, int rowNumber) async {
+    final spreadsheetId = await _requireSpreadsheetId();
+    final client = await _auth.authenticatedClient();
+    try {
+      await _deleteRow(
+        api: sheets.SheetsApi(client),
+        spreadsheetId: spreadsheetId,
+        sheetTitle: sheet,
+        rowNumber: rowNumber,
+      );
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<void> _deleteRow({
+    required sheets.SheetsApi api,
+    required String spreadsheetId,
+    required String sheetTitle,
+    required int rowNumber,
+  }) async {
+    final spreadsheet = await api.spreadsheets.get(spreadsheetId);
+    final sheetId = spreadsheet.sheets
+        ?.where((sheet) => sheet.properties?.title == sheetTitle)
+        .firstOrNull
+        ?.properties
+        ?.sheetId;
+    if (sheetId == null) throw const SheetNotReady();
+    await api.spreadsheets.batchUpdate(
+      sheets.BatchUpdateSpreadsheetRequest(
+        requests: [
+          sheets.Request(
+            deleteDimension: sheets.DeleteDimensionRequest(
+              range: sheets.DimensionRange(
+                dimension: 'ROWS',
+                sheetId: sheetId,
+                startIndex: rowNumber - 1,
+                endIndex: rowNumber,
+              ),
+            ),
+          ),
+        ],
+      ),
+      spreadsheetId,
+    );
   }
 
   Future<String> _requireSpreadsheetId() async {
@@ -262,12 +857,15 @@ class SheetsGateway {
     return id;
   }
 
-  _SheetRow _findRecord(List<List<Object?>>? rows, String id) {
-    final values = rows ?? const <List<Object?>>[];
-    for (var index = 0; index < values.length; index++) {
-      final row = values[index];
+  _TransactionRow _findTransaction(List<List<Object?>>? rows, String id) {
+    for (
+      var index = 0;
+      index < (rows ?? const <List<Object?>>[]).length;
+      index++
+    ) {
+      final row = rows![index];
       if (row.isNotEmpty && row.first.toString() == id) {
-        return _SheetRow(
+        return _TransactionRow(
           record: TransactionRecord.fromSheetRow(row),
           rowNumber: index + 2,
         );
@@ -275,12 +873,86 @@ class SheetsGateway {
     }
     throw const TransactionNotFound();
   }
+
+  _CategoryRow _findCategory(List<List<Object?>> rows, String id) {
+    for (var index = 0; index < rows.length; index++) {
+      if (rows[index].isNotEmpty && rows[index].first.toString() == id) {
+        return _CategoryRow(
+          record: CategoryRecord.fromSheetRow(rows[index]),
+          rowNumber: index + 2,
+        );
+      }
+    }
+    throw const ItemNotFound();
+  }
+
+  _TagRow _findTag(List<List<Object?>> rows, String id) {
+    for (var index = 0; index < rows.length; index++) {
+      if (rows[index].isNotEmpty && rows[index].first.toString() == id) {
+        return _TagRow(
+          record: TagRecord.fromSheetRow(rows[index]),
+          rowNumber: index + 2,
+        );
+      }
+    }
+    throw const ItemNotFound();
+  }
+
+  void _assertUniqueName({
+    required String name,
+    required TransactionType type,
+    required List<CategoryRecord> categories,
+    String? ignoredId,
+  }) {
+    if (categories.any(
+      (category) =>
+          category.id != ignoredId &&
+          category.type == type &&
+          category.name.toLowerCase() == name.toLowerCase(),
+    )) {
+      throw const DuplicateName();
+    }
+  }
+
+  void _assertUniqueTag(
+    String name,
+    List<TagRecord> tags, {
+    String? ignoredId,
+  }) {
+    if (tags.any(
+      (tag) =>
+          tag.id != ignoredId && tag.name.toLowerCase() == name.toLowerCase(),
+    )) {
+      throw const DuplicateName();
+    }
+  }
+
+  static bool _validMonth(String value) =>
+      RegExp(r'^\d{4}_(0[1-9]|1[0-2])$').hasMatch(value);
+  static String _currentUtcMonth() {
+    final now = DateTime.now().toUtc();
+    return '${now.year.toString().padLeft(4, '0')}_${now.month.toString().padLeft(2, '0')}';
+  }
+
+  static String _columnFor(int length) =>
+      const {2: 'B', 4: 'D', 7: 'G', 11: 'K'}[length] ?? 'A';
 }
 
-class _SheetRow {
-  const _SheetRow({required this.record, required this.rowNumber});
-
+class _TransactionRow {
+  const _TransactionRow({required this.record, required this.rowNumber});
   final TransactionRecord record;
+  final int rowNumber;
+}
+
+class _CategoryRow {
+  const _CategoryRow({required this.record, required this.rowNumber});
+  final CategoryRecord record;
+  final int rowNumber;
+}
+
+class _TagRow {
+  const _TagRow({required this.record, required this.rowNumber});
+  final TagRecord record;
   final int rowNumber;
 }
 
@@ -288,6 +960,41 @@ class SheetNotReady implements Exception {
   const SheetNotReady();
 }
 
+class SpreadsheetTrashed implements Exception {
+  const SpreadsheetTrashed(this.spreadsheetId);
+  final String spreadsheetId;
+}
+
 class TransactionNotFound implements Exception {
   const TransactionNotFound();
+}
+
+class ItemNotFound implements Exception {
+  const ItemNotFound();
+}
+
+class ItemLocked implements Exception {
+  const ItemLocked();
+}
+
+class ItemLimitReached implements Exception {
+  const ItemLimitReached();
+}
+
+class DuplicateName implements Exception {
+  const DuplicateName();
+}
+
+class SheetFormatInvalid implements Exception {
+  const SheetFormatInvalid(this.sheetName);
+  final String sheetName;
+}
+
+class TransactionListResult {
+  const TransactionListResult({
+    required this.records,
+    required this.skippedRows,
+  });
+  final List<TransactionRecord> records;
+  final int skippedRows;
 }

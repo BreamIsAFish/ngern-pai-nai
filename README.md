@@ -1,16 +1,17 @@
 # Ngern Pai Nai
 
-Ngern Pai Nai is a backend-free personal income and expense tracker. Flutter owns authentication, Google Sheets access, native security, and the WebView bridge. The React app renders the interface and never receives Google credentials.
+Ngern Pai Nai is a backend-free personal money journal for income, expenses, and transfers. Flutter owns authentication, Google Sheets access, native security, and the WebView bridge. React renders the interface and never receives Google credentials.
 
 ## Prototype 1 scope
 
 Prototype 1 includes:
 
 - Google Sign-In on Android and iOS with the `drive.file` scope
-- one private Google spreadsheet named `Ngern Pai Nai` per Google account
-- a `Transactions` worksheet with create, read, update, and delete operations
+- one private Google spreadsheet named `NgernPaiNai_data` per Google account
+- UTC-month transaction worksheets with create, read, update, delete, and cross-month move operations
+- type-specific categories and shared tags stored in dedicated worksheets
 - a typed request and response bridge with correlation IDs
-- a mobile-first React dashboard, setup flow, filters, transaction editor, and settings
+- a MeowJot-inspired English mobile interface for the home ledger, editor, search, monthly summary, profile, categories, and tags
 - a browser mock bridge for web development without Flutter or Google credentials
 - WebView origin allow-listing and external-link handling
 
@@ -44,7 +45,7 @@ fvm use
 
 ## Run the React app
 
-The browser build automatically uses an in-memory mock bridge and seeded transactions.
+The browser build automatically uses an in-memory mock bridge with seeded transactions, default categories, and a sample tag. Desktop and tablet browsers retain a centered phone-width canvas.
 
 ```bash
 cd web
@@ -114,13 +115,49 @@ The app contains no real client IDs. Google authentication and live Sheets acces
 
 ## Spreadsheet format
 
-Flutter creates a private spreadsheet named `Ngern Pai Nai` and a `Transactions` worksheet with these columns:
+Flutter creates a private spreadsheet named `NgernPaiNai_data`. Version 2 intentionally replaces the earlier prototype layout; it does not migrate old rows. On first bootstrap against the old schema, the app removes the old transaction/category/tag tabs and initializes the following layout.
+
+Transaction tabs are divided by UTC month and created only when needed. Their names use `Transactions_YYYY_MM`, for example `Transactions_2026_09`. Each has these exact English columns:
 
 ```text
-id, occurred_at, type, amount, currency, category, note, created_at, updated_at
+id, date, time, type, category, tag, amount, note, destination, created_at, updated_at
 ```
 
-The spreadsheet ID is cached per Google account in native preferences. The app searches files visible through `drive.file` before creating a replacement. It never writes access tokens or API keys to the spreadsheet.
+- `date` and `time` are UTC. The UI accepts local date/time, converts it to UTC for storage, and converts it back for display.
+- `type` is `expense`, `income`, or `transfer`.
+- amounts are positive THB values. Transfers do not affect income, expense, or balance totals.
+- `tag` and `destination` are nullable and use empty cells in Sheets. Destination is hidden from manual entry and reserved for the future receipt reader.
+- `created_at` and `updated_at` are UTC audit timestamps and are not shown in the UI.
+- future transaction timestamps are rejected.
+
+`Categories` uses:
+
+```text
+id, name, type, icon_url, is_default, created_at, updated_at
+```
+
+Categories belong to one transaction type. Default expense and income categories, plus the fixed Transfer category, are seeded and cannot be edited or deleted. Custom category names are trimmed, case-insensitively unique within a type, limited to 20 characters, and limited to 50 per type. An optional custom icon must be a public HTTPS URL. HTTP is rejected because unencrypted image requests can be intercepted or changed in transit; remote credentials are never attached. Broken or absent images use the built-in fallback icon.
+
+`Tags` uses:
+
+```text
+id, name, created_at, updated_at
+```
+
+Tags are shared across transaction types, case-insensitively unique, limited to 20 characters, and capped at 100. A transaction has at most one tag. Renaming or deleting a category or tag does not rewrite historical transaction text.
+
+The hidden `_Metadata` tab records `schema_version` and `initialized_at`. If a user manually changes an expected header, the app reports that the format needs attention instead of overwriting it. Malformed transaction rows are skipped and reported without being deleted.
+
+The spreadsheet ID is cached per Google account in native preferences. The app searches files visible through `drive.file` before creating a replacement. If the cached spreadsheet is in Google Drive trash, the app stops bootstrap and lets the user restore it or create a new spreadsheet. Creating a replacement leaves the old file in trash and updates the cached ID only after the new schema is ready. The app never writes access tokens or API keys to the spreadsheet.
+
+## Interface behavior
+
+- Home is grouped by local calendar date and defaults to the current local month. Pull down to refresh from Google Sheets.
+- Search covers at most 12 UTC month tabs per request. It defaults to the latest 12 months and can move backward through calendar years. It matches category, tag, note, destination, and amount case-insensitively.
+- Tapping a row opens the edit screen. Its top-left overflow menu contains the confirmed delete action.
+- Profile exposes only Google Sheet/account management, category management, and tag management.
+- Wallets, budgets, trends, and recurring entries remain visible for orientation but only show a “Coming later” message.
+- Currency is THB only.
 
 ## Deployment checklist
 
@@ -129,6 +166,7 @@ The spreadsheet ID is cached per Google account in native preferences. The app s
 - configure Android and iOS OAuth clients for production identifiers and signing keys
 - verify Google Sign-In on physical Android and iOS devices
 - verify first-run spreadsheet creation and returning-user reuse
+- verify restore and replacement flows with the cached spreadsheet in Drive trash
 - verify CRUD operations against a test Google account
 - run all checks listed below
 

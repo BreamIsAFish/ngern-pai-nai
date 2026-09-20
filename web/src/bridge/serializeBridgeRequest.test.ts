@@ -13,5 +13,24 @@ describe('serializeBridgeRequest', () => {
       payload: { id: 'tx-9' },
     })
   })
-})
 
+  it('preserves Thai text in the native bridge envelope', () => {
+    const serialized = serializeBridgeRequest({
+      id: 'request-thai',
+      operation: 'transactions.create',
+      payload: {
+        transaction: {
+          category: 'อาหาร',
+          note: 'ข้าวกลางวันกับแม่',
+          tag: 'รายเดือน',
+        },
+      },
+    })
+
+    expect(JSON.parse(serialized).payload.transaction).toEqual({
+      category: 'อาหาร',
+      note: 'ข้าวกลางวันกับแม่',
+      tag: 'รายเดือน',
+    })
+  })
+})

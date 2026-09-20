@@ -1,51 +1,21 @@
 import type { AppStatus } from '../bridge/types'
+import CatIllustration from '../ui/CatIllustration'
 import Icon from '../ui/Icon'
 
-interface SettingsPageProps {
-  busy: boolean
-  status: AppStatus
-  onBack?(): void
-  onSignOut?(): void
+interface Props { busy: boolean; status: AppStatus; onHome(): void; onManageSheet(): void; onManageCategories(): void; onManageTags(): void; onSignOut(): void }
+export default function SettingsPage({ busy, status, onHome, onManageSheet, onManageCategories, onManageTags, onSignOut }: Props) {
+  return <main className="profile-page">
+    <header className="profile-hero"><div className="profile-art"><div className="meow-gold"><span>฿</span><small>MeowGold</small></div><CatIllustration className="profile-cat" /></div></header>
+    <section className="profile-plan"><div><span>MeowGold</span><strong>Plan with confidence</strong></div><button disabled title="Coming later" type="button">Learn more</button></section>
+    <section className="profile-account"><div className="avatar">{status.accountEmail?.[0].toUpperCase() ?? 'G'}</div><div><strong>{status.accountEmail}</strong><span>{status.spreadsheetName} · Connected</span></div><button disabled={busy} onClick={onSignOut} type="button">Disconnect</button></section>
+    <h2>Settings</h2>
+    <nav className="profile-menu">
+      <button onClick={onManageSheet} type="button"><span><Icon name="sheet" /></span><div><strong>Google Sheet</strong><small>Open your sheet and view its link</small></div><b><Icon name="chevron-right" /></b></button>
+      <button onClick={onManageCategories} type="button"><span><Icon name="grid" /></span><div><strong>Manage categories</strong><small>Default and custom categories</small></div><b><Icon name="chevron-right" /></b></button>
+      <button onClick={onManageTags} type="button"><span><Icon name="tag" /></span><div><strong>Manage tags</strong><small>Shared across all entry types</small></div><b><Icon name="chevron-right" /></b></button>
+      <button disabled title="Coming later" type="button"><span><Icon name="card" /></span><div><strong>Manage credit cards <em>New</em></strong><small>Coming later</small></div><b><Icon name="chevron-right" /></b></button>
+      <button disabled title="Coming later" type="button"><span><Icon name="upload" /></span><div><strong>Export data</strong><small>Coming later</small></div><b><Icon name="chevron-right" /></b></button>
+    </nav>
+    <nav className="bottom-nav"><button onClick={onHome} type="button"><Icon name="home" size={25} /><span>Home</span></button><button className="active" type="button"><Icon name="profile" size={25} /><span>Profile</span></button></nav>
+  </main>
 }
-
-export default function SettingsPage({ busy, status, onBack, onSignOut }: SettingsPageProps) {
-  return (
-    <main className="app-shell settings-page">
-      <header className="app-header settings-header">
-        <button className="text-button" onClick={onBack} type="button">Back</button>
-        <h1>Settings</h1>
-        <span />
-      </header>
-
-      <section className="settings-section">
-        <p className="section-kicker">Google account</p>
-        <div className="settings-card">
-          <div className="account-avatar">{status.accountEmail?.slice(0, 1).toUpperCase() ?? 'G'}</div>
-          <div>
-            <strong>{status.accountEmail ?? 'Connected account'}</strong>
-            <span>Google connected</span>
-          </div>
-          <span className="status-pill">Connected</span>
-        </div>
-      </section>
-
-      <section className="settings-section">
-        <p className="section-kicker">Data storage</p>
-        <div className="settings-card storage-card">
-          <div className="settings-icon"><Icon name="sheet" /></div>
-          <div>
-            <strong>{status.spreadsheetName ?? 'Ngern Pai Nai'}</strong>
-            <span>Private Google Sheet</span>
-          </div>
-        </div>
-        <p className="settings-explainer">Only this app and people you explicitly share the sheet with can access it.</p>
-      </section>
-
-      <button className="button button-danger" disabled={busy} onClick={onSignOut} type="button">
-        {busy ? 'Signing out...' : 'Disconnect Google'}
-      </button>
-      <p className="version-note">Ngern Pai Nai · Prototype 1</p>
-    </main>
-  )
-}
-

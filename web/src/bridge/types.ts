@@ -1,10 +1,14 @@
 import type { Transaction, TransactionInput } from '../transactions/model'
+import type { Category, CategoryInput } from '../categories/model'
+import type { Tag, TagInput } from '../tags/model'
 
 export interface AppStatus {
   signedIn: boolean
   sheetReady: boolean
   accountEmail?: string
   spreadsheetName?: string
+  spreadsheetTrashed?: boolean
+  spreadsheetUrl?: string
 }
 
 export interface BridgeError {
@@ -27,13 +31,23 @@ export interface BridgeOperations {
   'google.signIn': { payload: Record<string, never>; result: AppStatus }
   'google.signOut': { payload: Record<string, never>; result: AppStatus }
   'sheet.bootstrap': { payload: Record<string, never>; result: AppStatus }
-  'transactions.list': { payload: Record<string, never>; result: Transaction[] }
+  'sheet.restore': { payload: Record<string, never>; result: AppStatus }
+  'sheet.createReplacement': { payload: Record<string, never>; result: AppStatus }
+  'transactions.list': { payload: { utcMonths: string[] }; result: { transactions: Transaction[]; skippedRows: number } }
   'transactions.create': { payload: { transaction: TransactionInput }; result: Transaction }
   'transactions.update': {
-    payload: { id: string; transaction: TransactionInput }
+    payload: { id: string; sourceUtcMonth: string; transaction: TransactionInput }
     result: Transaction
   }
-  'transactions.delete': { payload: { id: string }; result: { id: string } }
+  'transactions.delete': { payload: { id: string; utcMonth: string }; result: { id: string } }
+  'categories.list': { payload: Record<string, never>; result: Category[] }
+  'categories.create': { payload: { category: CategoryInput }; result: Category }
+  'categories.update': { payload: { id: string; category: CategoryInput }; result: Category }
+  'categories.delete': { payload: { id: string }; result: { id: string } }
+  'tags.list': { payload: Record<string, never>; result: Tag[] }
+  'tags.create': { payload: { tag: TagInput }; result: Tag }
+  'tags.update': { payload: { id: string; tag: TagInput }; result: Tag }
+  'tags.delete': { payload: { id: string }; result: { id: string } }
 }
 
 export type BridgeOperation = keyof BridgeOperations
@@ -51,4 +65,3 @@ declare global {
     NgernPaiNaiBridge?: { receive(message: string): void }
   }
 }
-
