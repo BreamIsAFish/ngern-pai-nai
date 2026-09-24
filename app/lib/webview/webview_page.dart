@@ -9,6 +9,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../bridge/bridge_controller.dart';
+import 'is_allowed_web_app_uri.dart';
 
 class WebViewPage extends StatefulWidget {
   const WebViewPage({required this.bridge, required this.webAppUri, super.key});
@@ -44,6 +45,15 @@ class _WebViewPageState extends State<WebViewPage> {
   }
 
   Future<void> _handleBridgeMessage(JavaScriptMessage message) async {
+    final currentUrl = await _controller.currentUrl();
+    final currentUri = currentUrl == null ? null : Uri.tryParse(currentUrl);
+    if (currentUri == null ||
+        !isAllowedWebAppUri(allowed: widget.webAppUri, target: currentUri)) {
+      debugPrint(
+        '[WebViewPage] Blocked a bridge message outside the configured origin.',
+      );
+      return;
+    }
     final response = await widget.bridge.handleMessage(message.message);
     final responseString = jsonEncode(response.toJson());
     final safeJavaScriptString = jsonEncode(responseString);
@@ -55,7 +65,9 @@ class _WebViewPageState extends State<WebViewPage> {
   NavigationDecision _handleNavigation(NavigationRequest request) {
     final target = Uri.tryParse(request.url);
     if (target == null) return NavigationDecision.prevent;
-    if (_isAllowedOrigin(target)) return NavigationDecision.navigate;
+    if (isAllowedWebAppUri(allowed: widget.webAppUri, target: target)) {
+      return NavigationDecision.navigate;
+    }
 
     if (target.scheme == 'http' ||
         target.scheme == 'https' ||
@@ -64,13 +76,6 @@ class _WebViewPageState extends State<WebViewPage> {
       unawaited(launchUrl(target, mode: LaunchMode.externalApplication));
     }
     return NavigationDecision.prevent;
-  }
-
-  bool _isAllowedOrigin(Uri target) {
-    final allowed = widget.webAppUri;
-    return target.scheme == allowed.scheme &&
-        target.host == allowed.host &&
-        target.port == allowed.port;
   }
 
   @override
