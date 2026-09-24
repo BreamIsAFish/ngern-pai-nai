@@ -53,7 +53,7 @@ export default function createMockBridge(): BridgeClient {
       switch (operation) {
         case 'app.getStatus': result = status(); break
         case 'google.signIn': signedIn = true; result = status(); break
-        case 'google.signOut': signedIn = false; sheetReady = false; spreadsheetTrashed = false; result = status(); break
+        case 'google.disconnect': signedIn = false; sheetReady = false; spreadsheetTrashed = false; result = status(); break
         case 'sheet.bootstrap': result = status(); break
         case 'sheet.restore': spreadsheetTrashed = false; sheetReady = true; result = status(); break
         case 'sheet.createReplacement': {

@@ -29,7 +29,7 @@ export type BridgeResponse =
 export interface BridgeOperations {
   'app.getStatus': { payload: Record<string, never>; result: AppStatus }
   'google.signIn': { payload: Record<string, never>; result: AppStatus }
-  'google.signOut': { payload: Record<string, never>; result: AppStatus }
+  'google.disconnect': { payload: Record<string, never>; result: AppStatus }
   'sheet.bootstrap': { payload: Record<string, never>; result: AppStatus }
   'sheet.restore': { payload: Record<string, never>; result: AppStatus }
   'sheet.createReplacement': { payload: Record<string, never>; result: AppStatus }

@@ -2,12 +2,12 @@ import type { AppStatus } from '../bridge/types'
 import CatIllustration from '../ui/CatIllustration'
 import Icon from '../ui/Icon'
 
-interface Props { busy: boolean; status: AppStatus; onHome(): void; onManageSheet(): void; onManageCategories(): void; onManageTags(): void; onSignOut(): void }
-export default function SettingsPage({ busy, status, onHome, onManageSheet, onManageCategories, onManageTags, onSignOut }: Props) {
+interface Props { busy: boolean; status: AppStatus; onDisconnect(): void; onHome(): void; onManageSheet(): void; onManageCategories(): void; onManageTags(): void }
+export default function SettingsPage({ busy, status, onDisconnect, onHome, onManageSheet, onManageCategories, onManageTags }: Props) {
   return <main className="profile-page">
     <header className="profile-hero"><div className="profile-art"><div className="meow-gold"><span>฿</span><small>MeowGold</small></div><CatIllustration className="profile-cat" /></div></header>
     <section className="profile-plan"><div><span>MeowGold</span><strong>Plan with confidence</strong></div><button disabled title="Coming later" type="button">Learn more</button></section>
-    <section className="profile-account"><div className="avatar">{status.accountEmail?.[0].toUpperCase() ?? 'G'}</div><div><strong>{status.accountEmail}</strong><span>{status.spreadsheetName} · Connected</span></div><button disabled={busy} onClick={onSignOut} type="button">Disconnect</button></section>
+    <section className="profile-account"><div className="avatar">{status.accountEmail?.[0].toUpperCase() ?? 'G'}</div><div><strong>{status.accountEmail}</strong><span>{status.spreadsheetName} · Connected</span></div><button disabled={busy} onClick={onDisconnect} type="button">Disconnect</button></section>
     <h2>Settings</h2>
     <nav className="profile-menu">
       <button onClick={onManageSheet} type="button"><span><Icon name="sheet" /></span><div><strong>Google Sheet</strong><small>Open your sheet and view its link</small></div><b><Icon name="chevron-right" /></b></button>

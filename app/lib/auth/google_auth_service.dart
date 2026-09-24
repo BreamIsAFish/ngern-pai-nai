@@ -24,7 +24,7 @@ class GoogleAuthService {
     return account;
   }
 
-  Future<void> signOut() => _googleSignIn.signOut();
+  Future<void> disconnect() => _googleSignIn.disconnect();
 
   Future<AuthClient> authenticatedClient() async {
     await restoreSession();

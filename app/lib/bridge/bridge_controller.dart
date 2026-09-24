@@ -105,7 +105,7 @@ class BridgeController {
     return switch (request.operation) {
       'app.getStatus' => _status(),
       'google.signIn' => _signIn(),
-      'google.signOut' => _signOut(),
+      'google.disconnect' => _disconnect(),
       'sheet.bootstrap' => _bootstrapSheet(),
       'sheet.restore' => _restoreSheet(),
       'sheet.createReplacement' => _createReplacementSheet(),
@@ -146,8 +146,8 @@ class BridgeController {
     return _status();
   }
 
-  Future<Map<String, dynamic>> _signOut() async {
-    await _auth.signOut();
+  Future<Map<String, dynamic>> _disconnect() async {
+    await _auth.disconnect();
     return {'signedIn': false, 'sheetReady': false};
   }
 
