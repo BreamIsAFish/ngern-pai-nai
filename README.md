@@ -73,7 +73,9 @@ fvm flutter run --dart-define=WEB_APP_URL=http://10.0.2.2:5173
 
 Android emulators use `10.0.2.2` to reach the host. An iOS simulator can usually use `http://localhost:5173`. A physical device needs the development machine's LAN address and a Vite server started with `pnpm dev --host 0.0.0.0`.
 
-Production builds must pass an HTTPS URL:
+Production builds must pass an HTTPS URL. Release builds reject HTTP and show
+an on-screen configuration error. Debug builds allow HTTP for local development
+and print a prominent warning to the Flutter log:
 
 ```bash
 fvm flutter build apk --release --dart-define=WEB_APP_URL=https://money.example.com

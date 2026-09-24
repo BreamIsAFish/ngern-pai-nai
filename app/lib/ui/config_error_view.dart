@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../config/app_config.dart';
+
 class ConfigErrorView extends StatelessWidget {
-  const ConfigErrorView({super.key});
+  const ConfigErrorView({required this.problem, super.key});
+
+  final AppConfigProblem problem;
 
   @override
   Widget build(BuildContext context) {
@@ -35,16 +39,27 @@ class ConfigErrorView extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'Web app URL missing',
+                    switch (problem) {
+                      AppConfigProblem.missingOrInvalidUrl =>
+                        'Web app URL missing',
+                      AppConfigProblem.insecureReleaseUrl => 'HTTPS required',
+                    },
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 10),
-                  const Text(
-                    'Start Flutter with a complete HTTP or HTTPS URL using '
-                    '--dart-define=WEB_APP_URL=https://your-site.example.',
+                  Text(
+                    switch (problem) {
+                      AppConfigProblem.missingOrInvalidUrl =>
+                        'Start Flutter with a complete URL using '
+                            '--dart-define=WEB_APP_URL=https://your-site.example.',
+                      AppConfigProblem.insecureReleaseUrl =>
+                        'This release blocked an insecure HTTP web app URL. '
+                            'Rebuild with '
+                            '--dart-define=WEB_APP_URL=https://your-site.example.',
+                    },
                     style: TextStyle(color: Color(0xFF6D7068), height: 1.5),
                     textAlign: TextAlign.center,
                   ),

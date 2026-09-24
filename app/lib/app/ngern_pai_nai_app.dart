@@ -26,7 +26,7 @@ class NgernPaiNaiApp extends StatelessWidget {
         useMaterial3: true,
       ),
       home: webAppUri == null
-          ? const ConfigErrorView()
+          ? ConfigErrorView(problem: config.problem!)
           : WebViewPage(bridge: bridge, webAppUri: webAppUri),
     );
   }

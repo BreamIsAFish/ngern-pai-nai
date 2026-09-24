@@ -15,5 +15,26 @@ void main() {
         expect(AppConfig(webAppUrl: value).isValid, isFalse);
       }
     });
+
+    test('rejects HTTP when HTTPS is required for a release build', () {
+      const config = AppConfig(
+        webAppUrl: 'http://money.example.com',
+        requireHttps: true,
+      );
+
+      expect(config.isValid, isFalse);
+      expect(config.problem, AppConfigProblem.insecureReleaseUrl);
+      expect(config.securityLogMessage, contains('Blocked insecure'));
+    });
+
+    test('allows HTTP with a clear warning outside release builds', () {
+      const config = AppConfig(
+        webAppUrl: 'http://10.0.2.2:5173',
+        requireHttps: false,
+      );
+
+      expect(config.isValid, isTrue);
+      expect(config.securityLogMessage, contains('WARNING'));
+    });
   });
 }

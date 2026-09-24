@@ -12,11 +12,16 @@ void main() {
 
   final auth = GoogleAuthService();
   final sheets = SheetsGateway(auth: auth, store: SpreadsheetStore());
+  final config = AppConfig.fromEnvironment();
+  final securityLogMessage = config.securityLogMessage;
+  if (securityLogMessage != null) {
+    debugPrint('[AppConfig] $securityLogMessage');
+  }
 
   runApp(
     NgernPaiNaiApp(
       bridge: BridgeController(auth: auth, sheets: sheets),
-      config: AppConfig.fromEnvironment(),
+      config: config,
     ),
   );
 }
