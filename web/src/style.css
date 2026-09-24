@@ -24,6 +24,11 @@
   --ink: #061a2e;
   --green: #25cd72;
   --red: #ff5656;
+  --chart-color-1: #c8ff00;
+  --chart-color-2: #ea19ed;
+  --chart-color-3: #ff5eea;
+  --chart-color-4: #ff9d00;
+  --chart-color-5: #27d17f;
   --app-header-height: 56px;
 }
 
@@ -438,7 +443,10 @@ h1, h2, h3, p { margin: 0; }
 .breakdown-tabs button { align-items: center; background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--muted); display: flex; gap: 7px; justify-content: center; padding: 13px 4px; }
 .breakdown-tabs button.active { border-color: white; color: white; font-weight: 800; }
 .breakdown-list div { align-items: center; background: var(--navy-deep); border-top: 1px solid var(--line); display: grid; grid-template-columns: 40px 1fr auto; margin: 0 -16px; min-height: 72px; padding: 16px; }
-.breakdown-icon { color: var(--muted); }
+.breakdown-icon { align-items: center; color: var(--muted); display: flex; height: 40px; justify-content: center; width: 40px; }
+.breakdown-icon img, .breakdown-icon > span { align-items: center; display: flex; height: 36px; justify-content: center; object-fit: contain; width: 36px; }
+.breakdown-name { align-items: center; display: flex; gap: 9px; }
+.breakdown-color { background: var(--breakdown-color); border-radius: 50%; flex: 0 0 auto; height: 9px; width: 9px; }
 .breakdown-list p { color: var(--muted); padding: 25px; text-align: center; }
 
 .search-page > header { align-items: center; background: var(--yellow); display: grid; grid-template-columns: 44px 1fr; padding: 6px 17px 10px; }

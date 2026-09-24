@@ -1,10 +1,13 @@
-import { useMemo, useState } from 'react'
+import { type CSSProperties, useMemo, useState } from 'react'
+import CategoryIcon from '../categories/CategoryIcon'
+import type { Category } from '../categories/model'
 import MonthPickerDialog from '../month-picker/MonthPickerDialog'
 import type { Transaction, TransactionType } from '../transactions/model'
 import { transactionLocalMonth } from '../transactions/time'
 import Icon from '../ui/Icon'
 
 interface Props {
+  categories: Category[]
   initialView?: 'chart' | 'list'
   monthPickerOpenInitially?: boolean
   latestMonth: string
@@ -16,9 +19,9 @@ interface Props {
 }
 
 const money = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 })
-const palette = ['#c8ff00', '#ea19ed', '#ff5eea', '#ff9d00', '#27d17f']
+const palette = ['var(--chart-color-1)', 'var(--chart-color-2)', 'var(--chart-color-3)', 'var(--chart-color-4)', 'var(--chart-color-5)']
 
-export default function SummaryPage({ initialView = 'chart', latestMonth, loading, month, monthPickerOpenInitially = false, transactions, onBack, onChangeMonth }: Props) {
+export default function SummaryPage({ categories, initialView = 'chart', latestMonth, loading, month, monthPickerOpenInitially = false, transactions, onBack, onChangeMonth }: Props) {
   const [type, setType] = useState<TransactionType>('expense')
   const [breakdown, setBreakdown] = useState<'category' | 'tag'>('category')
   const [view, setView] = useState(initialView)
@@ -31,9 +34,18 @@ export default function SummaryPage({ initialView = 'chart', latestMonth, loadin
     const key = breakdown === 'category' ? item.category : item.tag ?? 'No tag'
     return { ...result, [key]: (result[key] ?? 0) + item.amount }
   }, {})
-  const groups = Object.entries(grouped).map(([name, amount]) => ({ name, amount })).sort((a, b) => b.amount - a.amount)
+  const groups = Object.entries(grouped)
+    .map(([name, amount]) => ({ name, amount }))
+    .sort((a, b) => b.amount - a.amount)
+    .map((group, index) => ({
+      ...group,
+      color: palette[index % palette.length],
+      iconUrl: breakdown === 'category'
+        ? categories.find((category) => category.type === type && category.name === group.name)?.iconUrl ?? null
+        : null,
+    }))
   const gradient = groups.length
-    ? groups.map((_, index) => `${palette[index % palette.length]} ${groups.slice(0, index).reduce((sum, item) => sum + item.amount, 0) / selectedTotal * 100}% ${groups.slice(0, index + 1).reduce((sum, item) => sum + item.amount, 0) / selectedTotal * 100}%`).join(',')
+    ? groups.map((group, index) => `${group.color} ${groups.slice(0, index).reduce((sum, item) => sum + item.amount, 0) / selectedTotal * 100}% ${groups.slice(0, index + 1).reduce((sum, item) => sum + item.amount, 0) / selectedTotal * 100}%`).join(',')
     : '#173751 0 100%'
   const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' }).format(new Date(`${month}-01T12:00:00`))
   const shiftMonth = (amount: number) => {
@@ -63,7 +75,7 @@ export default function SummaryPage({ initialView = 'chart', latestMonth, loadin
       {view === 'chart' && <div className="donut" style={{ background: `conic-gradient(${gradient})` }}><div><span>{type}</span><small>{monthLabel}</small><strong>{money.format(selectedTotal)} ฿</strong></div></div>}
       <div className="coming-row"><button disabled title="Coming later" type="button"><Icon name="chart" /> Trend <small>Coming later</small></button><button disabled title="Coming later" type="button"><Icon name="budget" /> Budget <small>Coming later</small></button></div>
       <div className="breakdown-tabs"><button className={breakdown === 'category' ? 'active' : ''} onClick={() => setBreakdown('category')} type="button"><Icon name="grid" /> Categories</button><button className={breakdown === 'tag' ? 'active' : ''} onClick={() => setBreakdown('tag')} type="button"><Icon name="tag" /> Tags</button></div>
-      <div className="breakdown-list">{groups.map((group) => <div key={group.name}><span className="breakdown-icon"><Icon name={breakdown === 'category' ? 'grid' : 'tag'} /></span><strong>{group.name}</strong><b>{money.format(group.amount)}</b></div>)}{!groups.length && <p>No {type} entries this month.</p>}</div>
+      <div className="breakdown-list">{groups.map((group) => <div key={group.name} style={{ '--breakdown-color': group.color } as CSSProperties}><span className="breakdown-icon">{breakdown === 'category' ? <CategoryIcon iconUrl={group.iconUrl} /> : <Icon name="tag" />}</span><strong className="breakdown-name"><span aria-hidden="true" className="breakdown-color" />{group.name}</strong><b>{money.format(group.amount)}</b></div>)}{!groups.length && <p>No {type} entries this month.</p>}</div>
     </section>
     {monthPickerOpen && <MonthPickerDialog latestMonth={latestMonth} month={month} onCancel={() => setMonthPickerOpen(false)} onSelect={(value) => { setMonthPickerOpen(false); onChangeMonth(value) }} />}
   </main>

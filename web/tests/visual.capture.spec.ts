@@ -387,3 +387,17 @@ test('lets the Summary category tabs stick below the header with scroll room ben
   await expect(page.locator('.breakdown-tabs')).toHaveCSS('position', 'sticky')
   expect(await page.locator('.breakdown-tabs').evaluate((element) => Math.round(element.getBoundingClientRect().top))).toBe(56)
 })
+
+test('shows category icons and uses each pie-slice color beside its category name', async ({ page }) => {
+  await page.goto('/?visual=summary')
+  await expect(page.locator('[data-visual-ready="true"]')).toBeVisible()
+
+  const rows = page.locator('.breakdown-list > div')
+  await expect(rows).toHaveCount(2)
+  await expect(rows.locator('[data-category-icon-source="image"]')).toHaveCount(2)
+
+  const markerColors = await rows.locator('.breakdown-color').evaluateAll((markers) => markers.map((marker) => getComputedStyle(marker).backgroundColor))
+  const pieChart = await page.locator('.donut').evaluate((element) => getComputedStyle(element).backgroundImage)
+  expect(new Set(markerColors).size).toBe(markerColors.length)
+  for (const markerColor of markerColors) expect(pieChart).toContain(markerColor)
+})
