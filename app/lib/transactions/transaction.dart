@@ -15,6 +15,24 @@ enum TransactionType {
   }
 }
 
+enum TransactionSource {
+  manual,
+  receiptAi;
+
+  static TransactionSource parse(String value) {
+    return switch (value) {
+      'manual' => TransactionSource.manual,
+      'receipt_ai' => TransactionSource.receiptAi,
+      _ => throw const FormatException('Unsupported transaction source.'),
+    };
+  }
+
+  String get sheetValue => switch (this) {
+    TransactionSource.manual => 'manual',
+    TransactionSource.receiptAi => 'receipt_ai',
+  };
+}
+
 class TransactionInput {
   const TransactionInput({
     required this.date,
@@ -25,6 +43,9 @@ class TransactionInput {
     required this.amount,
     required this.note,
     required this.destination,
+    this.transactionNumber,
+    this.source = TransactionSource.manual,
+    this.dateInferred = false,
   });
 
   factory TransactionInput.fromJson(Map<String, dynamic> json) {
@@ -32,19 +53,26 @@ class TransactionInput {
     final time = (json['time'] as String? ?? '').trim();
     final instant = DateTime.tryParse('${date}T${time}Z');
     final amount = (json['amount'] as num?)?.toDouble();
-    final category = (json['category'] as String? ?? '').trim();
+    final category = _nullableString(json['category']);
     final note = (json['note'] as String? ?? '').trim();
+    final type = TransactionType.parse(json['type'] as String? ?? '');
+    final source = TransactionSource.parse(
+      json['source'] as String? ?? 'manual',
+    );
     if (instant == null ||
         !instant.isUtc ||
         instant.isAfter(DateTime.now().toUtc()) ||
         amount == null ||
         amount <= 0 ||
-        category.isEmpty ||
+        (source == TransactionSource.receiptAi &&
+            type != TransactionType.expense) ||
+        (type != TransactionType.transfer &&
+            source == TransactionSource.manual &&
+            category == null) ||
         !isWithinCharacterLimit(value: note, limit: 160)) {
       throw const FormatException('Invalid transaction fields.');
     }
 
-    final type = TransactionType.parse(json['type'] as String? ?? '');
     return TransactionInput(
       date: _dateOnly(instant),
       time: _timeOnly(instant),
@@ -54,16 +82,22 @@ class TransactionInput {
       amount: amount,
       note: note,
       destination: _nullableString(json['destination']),
+      transactionNumber: _nullableString(json['transactionNumber']),
+      source: source,
+      dateInferred: json['dateInferred'] == true,
     );
   }
 
   final double amount;
-  final String category;
+  final String? category;
   final String date;
+  final bool dateInferred;
   final String? destination;
   final String note;
+  final TransactionSource source;
   final String? tag;
   final String time;
+  final String? transactionNumber;
   final TransactionType type;
 
   DateTime get utcDateTime => DateTime.parse('${date}T${time}Z').toUtc();
@@ -79,6 +113,9 @@ class TransactionInput {
     'amount': amount,
     'note': note,
     'destination': destination,
+    'transactionNumber': transactionNumber,
+    'source': source.sheetValue,
+    'dateInferred': dateInferred,
   };
 }
 
@@ -91,7 +128,7 @@ class TransactionRecord {
   });
 
   factory TransactionRecord.fromSheetRow(List<Object?> row) {
-    if (row.length < 11) throw const FormatException('Incomplete sheet row.');
+    if (row.length < 14) throw const FormatException('Incomplete sheet row.');
     return TransactionRecord(
       id: row[0].toString(),
       input: TransactionInput.fromJson({
@@ -103,9 +140,12 @@ class TransactionRecord {
         'amount': double.tryParse(row[6].toString()),
         'note': row[7].toString(),
         'destination': row[8],
+        'transactionNumber': row[9],
+        'source': row[10].toString(),
+        'dateInferred': _sheetBoolean(row[11]),
       }),
-      createdAt: DateTime.parse(row[9].toString()).toUtc(),
-      updatedAt: DateTime.parse(row[10].toString()).toUtc(),
+      createdAt: DateTime.parse(row[12].toString()).toUtc(),
+      updatedAt: DateTime.parse(row[13].toString()).toUtc(),
     );
   }
 
@@ -119,11 +159,14 @@ class TransactionRecord {
     input.date,
     input.time,
     input.type.name,
-    input.category,
+    input.category ?? '',
     input.tag ?? '',
     input.amount,
     input.note,
     input.destination ?? '',
+    input.transactionNumber ?? '',
+    input.source.sheetValue,
+    input.dateInferred,
     createdAt.toIso8601String(),
     updatedAt.toIso8601String(),
   ];
@@ -153,4 +196,9 @@ String _timeOnly(DateTime date) {
 String? _nullableString(Object? value) {
   final text = value?.toString().trim() ?? '';
   return text.isEmpty ? null : text;
+}
+
+bool _sheetBoolean(Object? value) {
+  final normalized = value?.toString().trim().toLowerCase();
+  return normalized == 'true';
 }

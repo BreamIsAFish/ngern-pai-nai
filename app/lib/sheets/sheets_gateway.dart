@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:googleapis/sheets/v4.dart' as sheets;
 import 'package:uuid/uuid.dart';
@@ -6,6 +8,7 @@ import '../auth/google_auth_service.dart';
 import '../categories/category.dart';
 import '../categories/default_categories.dart';
 import '../categories/reconcile_default_categories.dart';
+import '../receipts/receipt_duplicate.dart';
 import '../storage/spreadsheet_store.dart';
 import '../tags/tag.dart';
 import '../transactions/transaction.dart';
@@ -23,7 +26,7 @@ class SheetsGateway {
   static const categoriesSheet = 'Categories';
   static const tagsSheet = 'Tags';
   static const metadataSheet = '_Metadata';
-  static const schemaVersion = '2';
+  static const schemaVersion = '3';
   static const transactionHeaders = [
     'id',
     'date',
@@ -34,6 +37,9 @@ class SheetsGateway {
     'amount',
     'note',
     'destination',
+    'transaction_number',
+    'source',
+    'date_inferred',
     'created_at',
     'updated_at',
   ];
@@ -51,6 +57,7 @@ class SheetsGateway {
   final GoogleAuthService _auth;
   final SpreadsheetStore _store;
   final Uuid _uuid;
+  Future<void> _receiptWriteTail = Future<void>.value();
 
   Future<bool> hasStoredSpreadsheet(String accountId) async =>
       await _store.read(accountId) != null;
@@ -87,9 +94,10 @@ class SheetsGateway {
         }
       }
       spreadsheetId ??= await _findSpreadsheet(driveApi);
+      final isNew = spreadsheetId == null;
       spreadsheetId ??= await _createSpreadsheet(api);
-      await _initializeSchema(api, spreadsheetId);
       await _store.write(accountId: account.id, spreadsheetId: spreadsheetId);
+      await _initializeSchema(api, spreadsheetId, allowReset: isNew);
       return spreadsheetId;
     } finally {
       client.close();
@@ -121,7 +129,7 @@ class SheetsGateway {
     try {
       final api = sheets.SheetsApi(client);
       final spreadsheetId = await _createSpreadsheet(api);
-      await _initializeSchema(api, spreadsheetId);
+      await _initializeSchema(api, spreadsheetId, allowReset: true);
       await _store.write(accountId: account.id, spreadsheetId: spreadsheetId);
       return spreadsheetId;
     } finally {
@@ -130,6 +138,20 @@ class SheetsGateway {
   }
 
   static bool isFileTrashed(drive.File file) => file.trashed ?? false;
+
+  Future<void> resetTransactionsForSchemaUpgrade() async {
+    final spreadsheetId = await _requireSpreadsheetId();
+    final client = await _auth.authenticatedClient();
+    try {
+      await _initializeSchema(
+        sheets.SheetsApi(client),
+        spreadsheetId,
+        allowReset: true,
+      );
+    } finally {
+      client.close();
+    }
+  }
 
   Future<TransactionListResult> listTransactions(List<String> utcMonths) async {
     if (utcMonths.isEmpty ||
@@ -156,7 +178,7 @@ class SheetsGateway {
         await _validateHeader(api, spreadsheetId, title, transactionHeaders);
         final result = await api.spreadsheets.values.get(
           spreadsheetId,
-          '$title!A2:K',
+          '$title!A2:N',
         );
         for (final row in result.values ?? const <List<Object?>>[]) {
           if (row.isEmpty || row.first.toString().isEmpty) continue;
@@ -193,7 +215,7 @@ class SheetsGateway {
       await api.spreadsheets.values.append(
         sheets.ValueRange(values: [record.toSheetRow()]),
         spreadsheetId,
-        '$title!A:K',
+        '$title!A:N',
         valueInputOption: 'RAW',
         insertDataOption: 'INSERT_ROWS',
       );
@@ -201,6 +223,55 @@ class SheetsGateway {
     } finally {
       client.close();
     }
+  }
+
+  Future<ReceiptTransactionCreateResult> createReceiptTransaction(
+    TransactionInput input,
+  ) {
+    if (input.source != TransactionSource.receiptAi ||
+        input.type != TransactionType.expense) {
+      throw const FormatException('Invalid receipt transaction.');
+    }
+    final completer = Completer<ReceiptTransactionCreateResult>();
+    _receiptWriteTail = _receiptWriteTail.catchError((_) {}).then((_) async {
+      try {
+        final duplicate = await findReceiptDuplicate(input);
+        if (duplicate != null) {
+          completer.complete(
+            ReceiptTransactionCreateResult(duplicate: duplicate),
+          );
+          return;
+        }
+        completer.complete(
+          ReceiptTransactionCreateResult(
+            record: await createTransaction(input),
+          ),
+        );
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    });
+    return completer.future;
+  }
+
+  Future<TransactionRecord?> findReceiptDuplicate(
+    TransactionInput input, {
+    String? ignoredId,
+  }) async {
+    if (normalizeReceiptTransactionNumber(input.transactionNumber) == null ||
+        input.dateInferred) {
+      return null;
+    }
+    final result = await listTransactions(
+      utcMonthsCoveringLocalReceiptDate(input.utcDateTime),
+    );
+    for (final record in result.records) {
+      if (record.id == ignoredId) continue;
+      if (hasSameReceiptFingerprint(input, record.input)) {
+        return record;
+      }
+    }
+    return null;
   }
 
   Future<TransactionRecord> updateTransaction({
@@ -224,21 +295,28 @@ class SheetsGateway {
       );
       final rows = await api.spreadsheets.values.get(
         spreadsheetId,
-        '$sourceTitle!A2:K',
+        '$sourceTitle!A2:N',
       );
       final match = _findTransaction(rows.values, id);
+      if (input.source != match.record.input.source) {
+        throw const FormatException('Transaction source cannot change.');
+      }
       final updated = TransactionRecord(
         id: id,
         input: input,
         createdAt: match.record.createdAt,
         updatedAt: DateTime.now().toUtc(),
       );
+      if (input.source == TransactionSource.receiptAi) {
+        final duplicate = await findReceiptDuplicate(input, ignoredId: id);
+        if (duplicate != null) throw ReceiptDuplicate(duplicate);
+      }
       final targetTitle = transactionSheet(input.utcMonth);
       if (sourceTitle == targetTitle) {
         await api.spreadsheets.values.update(
           sheets.ValueRange(values: [updated.toSheetRow()]),
           spreadsheetId,
-          '$sourceTitle!A${match.rowNumber}:K${match.rowNumber}',
+          '$sourceTitle!A${match.rowNumber}:N${match.rowNumber}',
           valueInputOption: 'RAW',
         );
       } else {
@@ -251,7 +329,7 @@ class SheetsGateway {
         await api.spreadsheets.values.append(
           sheets.ValueRange(values: [updated.toSheetRow()]),
           spreadsheetId,
-          '$targetTitle!A:K',
+          '$targetTitle!A:N',
           valueInputOption: 'RAW',
           insertDataOption: 'INSERT_ROWS',
         );
@@ -281,7 +359,7 @@ class SheetsGateway {
       await _validateHeader(api, spreadsheetId, title, transactionHeaders);
       final rows = await api.spreadsheets.values.get(
         spreadsheetId,
-        '$title!A2:K',
+        '$title!A2:N',
       );
       final match = _findTransaction(rows.values, id);
       await _deleteRow(
@@ -449,8 +527,9 @@ class SheetsGateway {
 
   Future<void> _initializeSchema(
     sheets.SheetsApi api,
-    String spreadsheetId,
-  ) async {
+    String spreadsheetId, {
+    required bool allowReset,
+  }) async {
     final spreadsheet = await api.spreadsheets.get(spreadsheetId);
     final hasMetadata =
         spreadsheet.sheets?.any(
@@ -470,6 +549,7 @@ class SheetsGateway {
       }
     }
     if (version != schemaVersion) {
+      if (!allowReset) throw SchemaUpgradeRequired(version);
       await _resetSchema(api, spreadsheetId, hasMetadata: hasMetadata);
       return;
     }
@@ -544,14 +624,12 @@ class SheetsGateway {
       await _addSheet(api, spreadsheetId, metadataSheet);
     }
     await _setSheetHidden(api, spreadsheetId, metadataSheet, hidden: false);
-    var spreadsheet = await api.spreadsheets.get(spreadsheetId);
+    final spreadsheet = await api.spreadsheets.get(spreadsheetId);
     final obsolete =
         spreadsheet.sheets
             ?.where((sheet) {
               final title = sheet.properties?.title ?? '';
               return title == 'Transactions' ||
-                  title == categoriesSheet ||
-                  title == tagsSheet ||
                   title.startsWith('Transactions_');
             })
             .map((sheet) => sheet.properties?.sheetId)
@@ -589,27 +667,53 @@ class SheetsGateway {
       '$metadataSheet!A1:B3',
       valueInputOption: 'RAW',
     );
-    await _addSheet(api, spreadsheetId, categoriesSheet);
-    await _addSheet(api, spreadsheetId, tagsSheet);
+    final remaining = await api.spreadsheets.get(spreadsheetId);
+    final titles =
+        remaining.sheets
+            ?.map((sheet) => sheet.properties?.title)
+            .whereType<String>()
+            .toSet() ??
+        <String>{};
+    final categoriesExist = titles.contains(categoriesSheet);
+    final tagsExist = titles.contains(tagsSheet);
+    if (!categoriesExist) await _addSheet(api, spreadsheetId, categoriesSheet);
+    if (!tagsExist) await _addSheet(api, spreadsheetId, tagsSheet);
     await _addSheet(api, spreadsheetId, transactionSheet(_currentUtcMonth()));
-    await _writeHeader(api, spreadsheetId, categoriesSheet, categoryHeaders);
-    await _writeHeader(api, spreadsheetId, tagsSheet, tagHeaders);
+    if (categoriesExist) {
+      await _validateHeader(
+        api,
+        spreadsheetId,
+        categoriesSheet,
+        categoryHeaders,
+      );
+    } else {
+      await _writeHeader(api, spreadsheetId, categoriesSheet, categoryHeaders);
+    }
+    if (tagsExist) {
+      await _validateHeader(api, spreadsheetId, tagsSheet, tagHeaders);
+    } else {
+      await _writeHeader(api, spreadsheetId, tagsSheet, tagHeaders);
+    }
     await _writeHeader(
       api,
       spreadsheetId,
       transactionSheet(_currentUtcMonth()),
       transactionHeaders,
     );
-    await api.spreadsheets.values.update(
-      sheets.ValueRange(
-        values: createDefaultCategories(
-          DateTime.now().toUtc(),
-        ).map((category) => category.toSheetRow()).toList(),
-      ),
-      spreadsheetId,
-      '$categoriesSheet!A2:G',
-      valueInputOption: 'RAW',
-    );
+    if (categoriesExist) {
+      await _reconcileDefaultCategoryRows(api, spreadsheetId);
+    } else {
+      await api.spreadsheets.values.update(
+        sheets.ValueRange(
+          values: createDefaultCategories(
+            DateTime.now().toUtc(),
+          ).map((category) => category.toSheetRow()).toList(),
+        ),
+        spreadsheetId,
+        '$categoriesSheet!A2:G',
+        valueInputOption: 'RAW',
+      );
+    }
     await _setSheetHidden(api, spreadsheetId, metadataSheet, hidden: true);
   }
 
@@ -935,7 +1039,7 @@ class SheetsGateway {
   }
 
   static String _columnFor(int length) =>
-      const {2: 'B', 4: 'D', 7: 'G', 11: 'K'}[length] ?? 'A';
+      const {2: 'B', 4: 'D', 7: 'G', 14: 'N'}[length] ?? 'A';
 }
 
 class _TransactionRow {
@@ -988,6 +1092,22 @@ class DuplicateName implements Exception {
 class SheetFormatInvalid implements Exception {
   const SheetFormatInvalid(this.sheetName);
   final String sheetName;
+}
+
+class SchemaUpgradeRequired implements Exception {
+  const SchemaUpgradeRequired(this.currentVersion);
+  final String? currentVersion;
+}
+
+class ReceiptDuplicate implements Exception {
+  const ReceiptDuplicate(this.record);
+  final TransactionRecord record;
+}
+
+class ReceiptTransactionCreateResult {
+  const ReceiptTransactionCreateResult({this.record, this.duplicate});
+  final TransactionRecord? record;
+  final TransactionRecord? duplicate;
 }
 
 class TransactionListResult {
