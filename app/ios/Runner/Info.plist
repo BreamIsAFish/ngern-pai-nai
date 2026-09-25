@@ -42,6 +42,10 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>ใช้กล้องเพื่อถ่ายรูปใบเสร็จสำหรับบันทึกรายจ่าย</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>เลือกรูปใบเสร็จจากคลังรูปภาพเพื่อบันทึกรายจ่าย</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

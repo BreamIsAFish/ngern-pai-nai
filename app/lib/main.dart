@@ -4,24 +4,62 @@ import 'app/ngern_pai_nai_app.dart';
 import 'auth/google_auth_service.dart';
 import 'bridge/bridge_controller.dart';
 import 'config/app_config.dart';
+import 'openai/open_ai_client.dart';
+import 'openai/open_ai_settings.dart';
+import 'openai/open_ai_settings_page.dart';
+import 'receipts/receipt_image_store.dart';
+import 'receipts/receipt_import_service.dart';
+import 'receipts/receipt_batch_progress_store.dart';
 import 'sheets/sheets_gateway.dart';
 import 'storage/spreadsheet_store.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final auth = GoogleAuthService();
   final sheets = SheetsGateway(auth: auth, store: SpreadsheetStore());
+  final openAiClient = OpenAiClient();
+  final openAiSettings = OpenAiSettingsStore();
+  final receiptImages = ReceiptImageStore();
+  final receiptProgress = ReceiptBatchProgressStore();
+  await receiptImages.cleanupStaleFiles();
+  final receiptImports = ReceiptImportService(
+    client: openAiClient,
+    images: receiptImages,
+    progress: receiptProgress,
+    settings: openAiSettings,
+    sheets: sheets,
+  );
+  final navigatorKey = GlobalKey<NavigatorState>();
   final config = AppConfig.fromEnvironment();
   final securityLogMessage = config.securityLogMessage;
   if (securityLogMessage != null) {
     debugPrint('[AppConfig] $securityLogMessage');
   }
 
+  Future<void> openOpenAiSettings() async {
+    final context = navigatorKey.currentContext;
+    if (context == null) throw StateError('Navigator is not ready.');
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            OpenAiSettingsPage(client: openAiClient, store: openAiSettings),
+      ),
+    );
+  }
+
   runApp(
     NgernPaiNaiApp(
-      bridge: BridgeController(auth: auth, sheets: sheets),
+      bridge: BridgeController(
+        auth: auth,
+        sheets: sheets,
+        openAiSettings: openAiSettings,
+        openOpenAiSettings: openOpenAiSettings,
+        receiptImports: receiptImports,
+        receiptProgress: receiptProgress,
+      ),
       config: config,
+      navigatorKey: navigatorKey,
     ),
   );
 }

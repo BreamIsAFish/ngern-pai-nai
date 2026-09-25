@@ -4,6 +4,10 @@ import 'package:flutter/foundation.dart';
 
 import '../auth/google_auth_service.dart';
 import '../categories/category.dart';
+import '../openai/open_ai_settings.dart';
+import '../receipts/receipt_image_store.dart';
+import '../receipts/receipt_import_service.dart';
+import '../receipts/receipt_batch_progress_store.dart';
 import '../sheets/sheets_gateway.dart';
 import '../tags/tag.dart';
 import '../transactions/transaction.dart';
@@ -13,11 +17,23 @@ class BridgeController {
   const BridgeController({
     required GoogleAuthService auth,
     required SheetsGateway sheets,
+    OpenAiSettingsStore? openAiSettings,
+    Future<void> Function()? openOpenAiSettings,
+    ReceiptImportService? receiptImports,
+    ReceiptBatchProgressStore? receiptProgress,
   }) : _auth = auth,
-       _sheets = sheets;
+       _sheets = sheets,
+       _openAiSettings = openAiSettings,
+       _openOpenAiSettings = openOpenAiSettings,
+       _receiptImports = receiptImports,
+       _receiptProgress = receiptProgress;
 
   final GoogleAuthService _auth;
   final SheetsGateway _sheets;
+  final OpenAiSettingsStore? _openAiSettings;
+  final Future<void> Function()? _openOpenAiSettings;
+  final ReceiptImportService? _receiptImports;
+  final ReceiptBatchProgressStore? _receiptProgress;
 
   Future<BridgeResponse> handleMessage(String message) async {
     var requestId = 'unknown';
@@ -56,6 +72,12 @@ class BridgeController {
         'SHEET_FORMAT_INVALID',
         'A Sheet tab has unexpected columns. Fix its header before continuing.',
       );
+    } on OpenAiNotConfigured {
+      return _failure(
+        requestId,
+        'OPENAI_NOT_CONFIGURED',
+        'ตั้งค่าและตรวจสอบ OpenAI API key ก่อน',
+      );
     } on TransactionNotFound {
       return _failure(
         requestId,
@@ -81,6 +103,13 @@ class BridgeController {
         requestId,
         'DUPLICATE_NAME',
         'That name is already in use.',
+      );
+    } on ReceiptDuplicate catch (error) {
+      return _failure(
+        requestId,
+        'DUPLICATE_RECEIPT',
+        'รายการนี้ซ้ำกับรายการที่มีอยู่',
+        data: error.record.toJson(),
       );
     } on FormatException {
       return _failure(
@@ -109,6 +138,15 @@ class BridgeController {
       'sheet.bootstrap' => _bootstrapSheet(),
       'sheet.restore' => _restoreSheet(),
       'sheet.createReplacement' => _createReplacementSheet(),
+      'sheet.resetTransactions' => _resetTransactions(),
+      'openai.getStatus' => _openAiStatus(),
+      'openai.openSettings' => _showOpenAiSettings(),
+      'receipts.acceptPrivacy' => _acceptReceiptPrivacy(),
+      'receipts.pick' => _pickReceipts(request.payload),
+      'receipts.process' => _processReceipt(request.payload),
+      'receipts.cancel' => _cancelReceiptBatch(request.payload),
+      'receipts.discard' => _discardReceiptBatch(request.payload),
+      'receipts.takeInterrupted' => _takeInterruptedReceipts(),
       'transactions.list' => _listTransactions(request.payload),
       'transactions.create' => _createTransaction(request.payload),
       'transactions.update' => _updateTransaction(request.payload),
@@ -155,6 +193,8 @@ class BridgeController {
     try {
       await _sheets.bootstrap();
       return await _status();
+    } on SchemaUpgradeRequired {
+      return {...await _status(), 'schemaResetRequired': true};
     } on SpreadsheetTrashed catch (error) {
       return {
         ...await _status(),
@@ -164,6 +204,83 @@ class BridgeController {
         'spreadsheetUrl': SheetsGateway.spreadsheetUrl(error.spreadsheetId),
       };
     }
+  }
+
+  Future<Map<String, dynamic>> _resetTransactions() async {
+    await _sheets.resetTransactionsForSchemaUpgrade();
+    return _status();
+  }
+
+  Future<Map<String, dynamic>> _openAiStatus() async {
+    final store = _openAiSettings;
+    if (store == null) {
+      return {
+        'configured': false,
+        'verified': false,
+        'model': OpenAiSettingsStore.defaultModel,
+        'privacyNoticeSeen': false,
+      };
+    }
+    return {
+      ...(await store.read()).toJson(),
+      'privacyNoticeSeen': await store.hasSeenPrivacyNotice(),
+    };
+  }
+
+  Future<Map<String, dynamic>> _acceptReceiptPrivacy() async {
+    final store = _openAiSettings;
+    if (store == null) throw const FormatException('Settings unavailable.');
+    await store.markPrivacyNoticeSeen();
+    return {'accepted': true};
+  }
+
+  Future<Map<String, dynamic>> _pickReceipts(
+    Map<String, dynamic> payload,
+  ) async {
+    final imports = _receiptImports;
+    if (imports == null) throw const FormatException('Importer unavailable.');
+    return (await imports.pick(
+      ReceiptImageSource.parse(_requiredString(payload, 'source')),
+    )).toJson();
+  }
+
+  Future<Map<String, dynamic>> _processReceipt(
+    Map<String, dynamic> payload,
+  ) async {
+    final imports = _receiptImports;
+    if (imports == null) throw const FormatException('Importer unavailable.');
+    return imports.process(
+      batchId: _requiredString(payload, 'batchId'),
+      imageId: _requiredString(payload, 'imageId'),
+    );
+  }
+
+  Map<String, dynamic> _cancelReceiptBatch(Map<String, dynamic> payload) {
+    final imports = _receiptImports;
+    if (imports == null) throw const FormatException('Importer unavailable.');
+    imports.cancel(_requiredString(payload, 'batchId'));
+    return {'cancelled': true};
+  }
+
+  Future<Map<String, dynamic>> _discardReceiptBatch(
+    Map<String, dynamic> payload,
+  ) async {
+    final imports = _receiptImports;
+    if (imports == null) throw const FormatException('Importer unavailable.');
+    await imports.discard(_requiredString(payload, 'batchId'));
+    return {'discarded': true};
+  }
+
+  Future<Map<String, dynamic>> _takeInterruptedReceipts() async {
+    final progress = _receiptProgress;
+    return {'completed': await progress?.takeInterruptedCount() ?? 0};
+  }
+
+  Future<Map<String, dynamic>> _showOpenAiSettings() async {
+    final open = _openOpenAiSettings;
+    if (open == null) throw const FormatException('Settings unavailable.');
+    await open();
+    return _openAiStatus();
   }
 
   Future<Map<String, dynamic>> _restoreSheet() async {
@@ -191,6 +308,9 @@ class BridgeController {
     Map<String, dynamic> payload,
   ) async {
     final input = TransactionInput.fromJson(_object(payload, 'transaction'));
+    if (input.source != TransactionSource.manual) {
+      throw const FormatException('Receipt imports use a separate operation.');
+    }
     return (await _sheets.createTransaction(input)).toJson();
   }
 
@@ -277,9 +397,13 @@ class BridgeController {
     return value.cast<String>();
   }
 
-  BridgeResponse _failure(String id, String code, String message) =>
-      BridgeResponse.failure(
-        id: id,
-        error: BridgeError(code: code, message: message),
-      );
+  BridgeResponse _failure(
+    String id,
+    String code,
+    String message, {
+    Object? data,
+  }) => BridgeResponse.failure(
+    id: id,
+    error: BridgeError(code: code, message: message, data: data),
+  );
 }
