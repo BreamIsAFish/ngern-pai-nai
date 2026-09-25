@@ -31,7 +31,7 @@ export default function SummaryPage({ categories, initialView = 'chart', latestM
   const selected = rows.filter((item) => item.type === type)
   const selectedTotal = total(type)
   const grouped = selected.reduce<Record<string, number>>((result, item) => {
-    const key = breakdown === 'category' ? item.category : item.tag ?? 'No tag'
+    const key = breakdown === 'category' ? item.category ?? 'ไม่มีหมวดหมู่' : item.tag ?? 'No tag'
     return { ...result, [key]: (result[key] ?? 0) + item.amount }
   }, {})
   const groups = Object.entries(grouped)
@@ -39,7 +39,7 @@ export default function SummaryPage({ categories, initialView = 'chart', latestM
     .sort((a, b) => b.amount - a.amount)
     .map((group, index) => ({
       ...group,
-      color: palette[index % palette.length],
+      color: breakdown === 'category' && group.name === 'ไม่มีหมวดหมู่' ? '#8a98a8' : palette[index % palette.length],
       iconUrl: breakdown === 'category'
         ? categories.find((category) => category.type === type && category.name === group.name)?.iconUrl ?? null
         : null,

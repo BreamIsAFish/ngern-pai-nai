@@ -7,6 +7,13 @@ interface PendingRequest {
   resolve(value: unknown): void
 }
 
+export class BridgeRequestError extends Error {
+  constructor(public readonly code: string, message: string, public readonly data?: unknown) {
+    super(message)
+    this.name = 'BridgeRequestError'
+  }
+}
+
 /** Creates a correlated request client for the narrow Flutter JavaScript channel. */
 export default function createNativeBridge(): BridgeClient {
   const pending = new Map<string, PendingRequest>()
@@ -32,7 +39,7 @@ export default function createNativeBridge(): BridgeClient {
           code: response.error.code,
           message: response.error.message,
         })
-        request.reject(new Error(response.error.message))
+        request.reject(new BridgeRequestError(response.error.code, response.error.message, response.error.data))
       }
     },
   }
@@ -52,12 +59,13 @@ export default function createNativeBridge(): BridgeClient {
       return new Promise((resolve, reject) => {
         pending.set(id, { operation, resolve, reject })
         window.FlutterBridge?.postMessage(message)
+        const timeoutMs = operation === 'openai.openSettings' ? 900_000 : operation === 'receipts.process' ? 90_000 : 20_000
         window.setTimeout(() => {
           if (!pending.has(id)) return
           pending.delete(id)
           console.error(`[FlutterBridge] ${operation} timed out.`)
           reject(new Error('The app did not respond. Please try again.'))
-        }, 20_000)
+        }, timeoutMs)
       })
     },
   }

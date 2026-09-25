@@ -13,7 +13,12 @@ export function localTimeValue(date = new Date()): string {
 export function draftToUtcInput(draft: TransactionDraft): TransactionInput {
   const { localDate, localTime, ...input } = draft
   const iso = new Date(`${localDate}T${localTime}:00`).toISOString()
-  return { ...input, date: iso.slice(0, 10), time: iso.slice(11, 19) }
+  return {
+    ...input,
+    category: input.category || null,
+    date: iso.slice(0, 10),
+    time: iso.slice(11, 19),
+  }
 }
 
 export function transactionInstant(transaction: Pick<Transaction, 'date' | 'time'>): Date {
@@ -24,8 +29,10 @@ export function transactionToDraft(transaction: Transaction): TransactionDraft {
   const instant = transactionInstant(transaction)
   return {
     localDate: localDateValue(instant), localTime: localTimeValue(instant), type: transaction.type,
-    category: transaction.category, tag: transaction.tag, amount: transaction.amount,
+    category: transaction.category ?? '', tag: transaction.tag, amount: transaction.amount,
     note: transaction.note, destination: transaction.destination,
+    transactionNumber: transaction.transactionNumber, source: transaction.source,
+    dateInferred: transaction.dateInferred,
   }
 }
 

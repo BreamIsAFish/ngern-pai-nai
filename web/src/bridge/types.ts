@@ -9,11 +9,31 @@ export interface AppStatus {
   spreadsheetName?: string
   spreadsheetTrashed?: boolean
   spreadsheetUrl?: string
+  schemaResetRequired?: boolean
 }
+
+export interface OpenAiStatus {
+  configured: boolean
+  verified: boolean
+  model: string
+  privacyNoticeSeen: boolean
+}
+
+export interface ReceiptImageSelection {
+  cancelled: boolean
+  batchId?: string
+  images: { id: string; name: string }[]
+}
+
+export type ReceiptProcessResult =
+  | { status: 'added' | 'duplicate'; transaction: Transaction; warnings: string[] }
+  | { status: 'failed'; message: string; requestId?: string; warnings: string[] }
+  | { status: 'cancelled'; warnings: string[] }
 
 export interface BridgeError {
   code: string
   message: string
+  data?: unknown
 }
 
 export interface BridgeRequest {
@@ -33,6 +53,15 @@ export interface BridgeOperations {
   'sheet.bootstrap': { payload: Record<string, never>; result: AppStatus }
   'sheet.restore': { payload: Record<string, never>; result: AppStatus }
   'sheet.createReplacement': { payload: Record<string, never>; result: AppStatus }
+  'sheet.resetTransactions': { payload: Record<string, never>; result: AppStatus }
+  'openai.getStatus': { payload: Record<string, never>; result: OpenAiStatus }
+  'openai.openSettings': { payload: Record<string, never>; result: OpenAiStatus }
+  'receipts.acceptPrivacy': { payload: Record<string, never>; result: { accepted: boolean } }
+  'receipts.pick': { payload: { source: 'camera' | 'gallery' }; result: ReceiptImageSelection }
+  'receipts.process': { payload: { batchId: string; imageId: string }; result: ReceiptProcessResult }
+  'receipts.cancel': { payload: { batchId: string }; result: { cancelled: boolean } }
+  'receipts.discard': { payload: { batchId: string }; result: { discarded: boolean } }
+  'receipts.takeInterrupted': { payload: Record<string, never>; result: { completed: number } }
   'transactions.list': { payload: { utcMonths: string[] }; result: { transactions: Transaction[]; skippedRows: number } }
   'transactions.create': { payload: { transaction: TransactionInput }; result: Transaction }
   'transactions.update': {

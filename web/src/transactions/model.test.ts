@@ -27,4 +27,12 @@ describe('mapTransaction', () => {
   it('accepts transfers', () => {
     expect(mapTransaction({ date: '2026-09-17', time: '00:00:00', type: 'transfer', amount: 10 }).type).toBe('transfer')
   })
+
+  it('keeps an imported transaction uncategorized', () => {
+    expect(mapTransaction({ date: '2026-09-17', time: '00:00:00', type: 'expense', amount: 10, category: '', source: 'receipt_ai' })).toMatchObject({
+      category: null,
+      source: 'receipt_ai',
+      dateInferred: false,
+    })
+  })
 })

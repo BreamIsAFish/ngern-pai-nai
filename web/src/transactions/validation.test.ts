@@ -10,6 +10,9 @@ const validInput = {
   tag: null,
   note: '',
   destination: null,
+  transactionNumber: null,
+  source: 'manual' as const,
+  dateInferred: false,
 }
 
 describe('validateTransaction', () => {
@@ -42,5 +45,9 @@ describe('validateTransaction', () => {
       tag: 'รายเดือน',
       note: 'ข้าวกลางวันกับแม่',
     }, new Date('2026-09-18T00:00:00Z'))).toEqual({})
+  })
+
+  it('allows a receipt import to remain uncategorized', () => {
+    expect(validateTransaction({ ...validInput, category: '', source: 'receipt_ai' }, new Date('2026-09-18T00:00:00Z'))).toEqual({})
   })
 })

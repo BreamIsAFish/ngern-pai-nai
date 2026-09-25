@@ -12,6 +12,7 @@ import Icon from '../ui/Icon'
 interface Props {
   categories: Category[]; latestMonth: string; loading: boolean; month: string; monthPickerOpenInitially?: boolean; refreshing: boolean; showCoach?: boolean; transactions: Transaction[]
   onAdd(): void; onEdit(item: Transaction): void; onChangeMonth(value: string): void
+  onScanReceipt(): void
   onOpenProfile(): void; onOpenSearch(): void; onOpenSummary(): void; onRefresh(): void
 }
 
@@ -57,7 +58,7 @@ export default function DashboardPage(props: Props) {
           </header>, document.body)}
           <section className="ledger">{props.loading ? <div aria-live="polite" className="month-loading" role="status"><Icon name="refresh" size={28} /><strong>Loading {label}...</strong><span>Reading transactions from your Sheet</span></div> : <TransactionList categories={props.categories} onEdit={props.onEdit} transactions={rows} />}</section>
         </section>
-        <button className="add-fab" onClick={props.onAdd} type="button"><Icon name="plus" size={25} /> Add entry</button>
+        <div className="entry-fabs"><button className="receipt-fab" onClick={props.onScanReceipt} type="button"><Icon name="receipt" size={23} /> สแกนใบเสร็จ</button><button className="add-fab" onClick={props.onAdd} type="button"><Icon name="plus" size={25} /> Add entry</button></div>
         <nav className="bottom-nav"><button className="active" type="button"><Icon name="home" size={25} /><span>Home</span></button><button onClick={props.onOpenProfile} type="button"><Icon name="profile" size={25} /><span>Profile</span></button></nav>
         {monthPickerOpen && <MonthPickerDialog latestMonth={props.latestMonth} month={props.month} onCancel={() => setMonthPickerOpen(false)} onSelect={(value) => { setMonthPickerOpen(false); props.onChangeMonth(value) }} />}
       </main>

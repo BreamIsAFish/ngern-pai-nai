@@ -13,7 +13,7 @@ interface Props { busy: boolean; categories: Category[]; initialCategoryPickerOp
 
 export default function TransactionForm({ busy, categories, initialCategoryPickerOpen = false, initialType = 'expense', tags, transaction, onCancel, onSubmit, onDelete, onManageCategories, onManageTags }: Props) {
   const initialCategory = initialType === 'transfer' ? 'Transfer' : ''
-  const initial = transaction ? transactionToDraft(transaction) : { localDate: localDateValue(), localTime: localTimeValue(), type: initialType, category: initialCategory, tag: null, amount: 0, note: '', destination: null }
+  const initial = transaction ? transactionToDraft(transaction) : { localDate: localDateValue(), localTime: localTimeValue(), type: initialType, category: initialCategory, tag: null, amount: 0, note: '', destination: null, transactionNumber: null, source: 'manual' as const, dateInferred: false }
   const [draft, setDraft] = useState<TransactionDraft>(initial)
   const [amount, setAmount] = useState(transaction ? String(transaction.amount) : '')
   const [submitted, setSubmitted] = useState(false)
@@ -24,13 +24,13 @@ export default function TransactionForm({ busy, categories, initialCategoryPicke
   const selectedCategory = available.find((item) => item.name === draft.category)
   const setType = (type: TransactionType) => setDraft((old) => ({ ...old, type, category: type === 'transfer' ? 'Transfer' : '', tag: type === 'transfer' ? null : old.tag }))
   const submit = () => {
-    const next = { ...draft, amount: Number(amount), category: draft.type === 'transfer' ? 'Transfer' : draft.category }
+    const next = { ...draft, amount: Number(amount), category: draft.type === 'transfer' ? 'Transfer' : draft.category, dateInferred: draft.source === 'receipt_ai' ? false : draft.dateInferred }
     setSubmitted(true)
     if (!Object.keys(validateTransaction(next)).length) onSubmit(draftToUtcInput(next))
   }
   const confirmDelete = () => { if (onDelete && window.confirm('Delete this transaction? This cannot be undone.')) onDelete() }
   return <main className="transaction-screen">
-    <header className="entry-header"><button aria-label="Close" onClick={onCancel} type="button"><Icon name="close" size={28} /></button><div className="entry-tabs">{(['expense', 'income', 'transfer'] as const).map((type) => <button className={draft.type === type ? 'active' : ''} key={type} onClick={() => setType(type)} type="button"><b><Icon name={type === 'expense' ? 'arrow-up' : type === 'income' ? 'arrow-down' : 'transfer'} size={24} /></b><span>{type[0].toUpperCase() + type.slice(1)}</span></button>)}</div>{transaction ? <div className="more-wrap"><button aria-label="More" onClick={() => setMenu(!menu)} type="button"><Icon name="more" size={27} /></button>{menu && <button className="delete-menu" onClick={confirmDelete} type="button">Delete transaction</button>}</div> : <span />}</header>
+    <header className="entry-header"><button aria-label="Close" onClick={onCancel} type="button"><Icon name="close" size={28} /></button><div className="entry-tabs">{(['expense', 'income', 'transfer'] as const).map((type) => <button className={draft.type === type ? 'active' : ''} disabled={draft.source === 'receipt_ai' && type !== 'expense'} key={type} onClick={() => setType(type)} type="button"><b><Icon name={type === 'expense' ? 'arrow-up' : type === 'income' ? 'arrow-down' : 'transfer'} size={24} /></b><span>{type[0].toUpperCase() + type.slice(1)}</span></button>)}</div>{transaction ? <div className="more-wrap"><button aria-label="More" onClick={() => setMenu(!menu)} type="button"><Icon name="more" size={27} /></button>{menu && <button className="delete-menu" onClick={confirmDelete} type="button">Delete transaction</button>}</div> : <span />}</header>
     <div className="entry-body">
       <div className="entry-date"><Icon name="calendar" size={23} /><input max={localDateValue()} onChange={(event) => setDraft({ ...draft, localDate: event.target.value })} type="date" value={draft.localDate} /><input onChange={(event) => setDraft({ ...draft, localTime: event.target.value })} type="time" value={draft.localTime} /></div>
       {errors.localDate && <em className="field-error">{errors.localDate}</em>}
@@ -40,6 +40,11 @@ export default function TransactionForm({ busy, categories, initialCategoryPicke
       {errors.category && <em className="field-error">{errors.category}</em>}
       <label className="note-panel"><span><Icon name="note" /></span><input aria-invalid={Boolean(errors.note)} onChange={(event) => setDraft({ ...draft, note: event.target.value })} placeholder="Add note" value={draft.note} /></label>
       {errors.note && <em className="field-error">{errors.note}</em>}
+      {draft.source === 'receipt_ai' && <>
+        <label className="note-panel"><span><Icon name="store" /></span><input onChange={(event) => setDraft({ ...draft, destination: event.target.value || null })} placeholder="ชื่อร้าน" value={draft.destination ?? ''} /></label>
+        <label className="note-panel"><span><Icon name="receipt" /></span><input onChange={(event) => setDraft({ ...draft, transactionNumber: event.target.value || null })} placeholder="เลขที่รายการ" value={draft.transactionNumber ?? ''} /></label>
+        {draft.dateInferred && <p className="receipt-date-warning">วันที่เดิมอ่านไม่ได้ กรุณาตรวจสอบวันที่ก่อนบันทึก</p>}
+      </>}
       {draft.type !== 'transfer' && <button className="future-option" disabled title="Coming later" type="button"><Icon name="repeat" /> <span>Schedule again</span><small>Coming later</small></button>}
       {draft.type === 'transfer' && <p className="transfer-help">Transfers are excluded from income and expense totals. Use them for moving money between accounts.</p>}
     </div>

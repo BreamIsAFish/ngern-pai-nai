@@ -14,16 +14,16 @@ const seedCategories: Category[] = defaultCategoryDefinitions.map((definition) =
 }))
 const seedTags: Tag[] = [{ id: 'tag-1', name: 'Monthly', createdAt: iso, updatedAt: iso }]
 const seedTransactions: Transaction[] = [
-  { id: 'mock-1', date: today, time: '05:30:00', type: 'expense', category: 'Food', tag: null, amount: 120, note: 'Lunch with May', destination: null, createdAt: iso, updatedAt: iso },
-  { id: 'mock-2', date: `${today.slice(0, 7)}-01`, time: '02:00:00', type: 'income', category: 'Salary', tag: 'Monthly', amount: 48000, note: 'Monthly salary', destination: null, createdAt: iso, updatedAt: iso },
-  { id: 'mock-3', date: today, time: '01:15:00', type: 'expense', category: 'Transport', tag: null, amount: 65, note: 'Train', destination: null, createdAt: iso, updatedAt: iso },
-  { id: 'mock-4', date: today, time: '00:30:00', type: 'transfer', category: 'Transfer', tag: null, amount: 1000, note: 'To savings', destination: null, createdAt: iso, updatedAt: iso },
+  { id: 'mock-1', date: today, time: '05:30:00', type: 'expense', category: 'Food', tag: null, amount: 120, note: 'Lunch with May', destination: null, transactionNumber: null, source: 'manual', dateInferred: false, createdAt: iso, updatedAt: iso },
+  { id: 'mock-2', date: `${today.slice(0, 7)}-01`, time: '02:00:00', type: 'income', category: 'Salary', tag: 'Monthly', amount: 48000, note: 'Monthly salary', destination: null, transactionNumber: null, source: 'manual', dateInferred: false, createdAt: iso, updatedAt: iso },
+  { id: 'mock-3', date: today, time: '01:15:00', type: 'expense', category: 'Transport', tag: null, amount: 65, note: 'Train', destination: null, transactionNumber: null, source: 'manual', dateInferred: false, createdAt: iso, updatedAt: iso },
+  { id: 'mock-4', date: today, time: '00:30:00', type: 'transfer', category: 'Transfer', tag: null, amount: 1000, note: 'To savings', destination: null, transactionNumber: null, source: 'manual', dateInferred: false, createdAt: iso, updatedAt: iso },
 ]
 const seedHomeHistory: Transaction[] = [
-  { id: 'mock-7', date: today, time: '06:00:00', type: 'income', category: 'Refunds', tag: null, amount: 6383.62, note: 'AIMET refund', destination: null, createdAt: iso, updatedAt: iso },
-  { id: 'mock-8', date: previousDay, time: '05:15:00', type: 'expense', category: 'Food', tag: null, amount: 891, note: 'Dinner', destination: null, createdAt: iso, updatedAt: iso },
-  { id: 'mock-5', date: previousDay, time: '04:45:00', type: 'transfer', category: 'Transfer', tag: null, amount: 3000, note: 'Move to emergency fund', destination: null, createdAt: iso, updatedAt: iso },
-  { id: 'mock-6', date: previousDay, time: '03:20:00', type: 'transfer', category: 'Transfer', tag: null, amount: 1500, note: 'Set aside for bills', destination: null, createdAt: iso, updatedAt: iso },
+  { id: 'mock-7', date: today, time: '06:00:00', type: 'income', category: 'Refunds', tag: null, amount: 6383.62, note: 'AIMET refund', destination: null, transactionNumber: null, source: 'manual', dateInferred: false, createdAt: iso, updatedAt: iso },
+  { id: 'mock-8', date: previousDay, time: '05:15:00', type: 'expense', category: 'Food', tag: null, amount: 891, note: 'Dinner', destination: null, transactionNumber: null, source: 'manual', dateInferred: false, createdAt: iso, updatedAt: iso },
+  { id: 'mock-5', date: previousDay, time: '04:45:00', type: 'transfer', category: 'Transfer', tag: null, amount: 3000, note: 'Move to emergency fund', destination: null, transactionNumber: null, source: 'manual', dateInferred: false, createdAt: iso, updatedAt: iso },
+  { id: 'mock-6', date: previousDay, time: '03:20:00', type: 'transfer', category: 'Transfer', tag: null, amount: 1500, note: 'Set aside for bills', destination: null, transactionNumber: null, source: 'manual', dateInferred: false, createdAt: iso, updatedAt: iso },
 ]
 
 /** Browser-only in-memory bridge for interface development and screenshots. */
@@ -36,6 +36,8 @@ export default function createMockBridge(): BridgeClient {
   let transactions = [...seedTransactions, ...(visualState?.startsWith('home-') ? seedHomeHistory : [])]
   let categories = [...seedCategories]
   let tags = [...seedTags]
+  let openAiConfigured = true
+  let privacyNoticeSeen = true
   const status = () => ({
     signedIn,
     sheetReady,
@@ -59,6 +61,33 @@ export default function createMockBridge(): BridgeClient {
         case 'sheet.createReplacement': {
           spreadsheetTrashed = false; sheetReady = true; spreadsheetId = 'replacement-sheet-id'; transactions = []; tags = []; result = status(); break
         }
+        case 'sheet.resetTransactions': transactions = []; result = status(); break
+        case 'openai.getStatus': result = { configured: openAiConfigured, verified: openAiConfigured, model: 'gpt-6-luna', privacyNoticeSeen }; break
+        case 'openai.openSettings': openAiConfigured = true; result = { configured: true, verified: true, model: 'gpt-6-luna', privacyNoticeSeen }; break
+        case 'receipts.acceptPrivacy': privacyNoticeSeen = true; result = { accepted: true }; break
+        case 'receipts.pick': {
+          const source = (payload as BridgeOperations['receipts.pick']['payload']).source
+          result = { cancelled: false, batchId: 'mock-batch', images: source === 'camera' ? [{ id: 'receipt-1', name: 'receipt.jpg' }] : [{ id: 'receipt-1', name: 'receipt-1.jpg' }, { id: 'receipt-2', name: 'receipt-2.jpg' }] }
+          break
+        }
+        case 'receipts.process': {
+          const { imageId } = payload as BridgeOperations['receipts.process']['payload']
+          const transaction: Transaction = { id: `mock-${imageId}`, date: today, time: '05:30:00', type: 'expense', category: null, tag: null, amount: imageId === 'receipt-1' ? 245 : 89, note: 'อาหารและเครื่องดื่ม', destination: 'ร้านตัวอย่าง', transactionNumber: `TX-${imageId}`, source: 'receipt_ai', dateInferred: false, createdAt: stamp(), updatedAt: stamp() }
+          if (visualState === 'receipt-results' && imageId === 'receipt-2') {
+            result = { status: 'duplicate', transaction: seedTransactions[0], warnings: [] }
+            break
+          }
+          if (visualState === 'receipt-results' && imageId === 'receipt-3') {
+            result = { status: 'failed', message: 'อ่านยอดเงินรวมสุทธิเป็นบาทไม่ได้', requestId: 'req_demo', warnings: [] }
+            break
+          }
+          transactions = [transaction, ...transactions]
+          result = { status: 'added', transaction, warnings: [] }
+          break
+        }
+        case 'receipts.cancel': result = { cancelled: true }; break
+        case 'receipts.discard': result = { discarded: true }; break
+        case 'receipts.takeInterrupted': result = { completed: 0 }; break
         case 'transactions.list': {
           const months = (payload as BridgeOperations['transactions.list']['payload']).utcMonths
           result = { transactions: transactions.filter((item) => months.includes(item.date.slice(0, 7).replace('-', '_'))), skippedRows: 0 }

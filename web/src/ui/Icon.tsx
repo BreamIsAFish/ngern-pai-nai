@@ -4,6 +4,7 @@ type IconName =
   | 'list' | 'menu' | 'more' | 'note' | 'plus' | 'profile' | 'refresh'
   | 'repeat' | 'search' | 'settings' | 'sheet' | 'tag' | 'transfer'
   | 'upload' | 'wallet' | 'wifi'
+  | 'camera' | 'image' | 'key' | 'receipt' | 'store'
 
 interface IconProps {
   name: IconName
@@ -39,6 +40,11 @@ const paths: Record<IconName, string> = {
   upload: 'M12 16V3m0 0L7 8m5-5 5 5M4 14v7h16v-7',
   wallet: 'M4 7h15a1 1 0 0 1 1 1v11H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h12v3m0 5h3v4h-3a2 2 0 0 1 0-4Z',
   wifi: 'M4 9a12 12 0 0 1 16 0M7 12a8 8 0 0 1 10 0m-7 3a4 4 0 0 1 4 0m-2 4h.01',
+  camera: 'M4 7h3l2-3h6l2 3h3v13H4V7Zm8 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z',
+  image: 'M4 4h16v16H4V4Zm0 12 5-5 4 4 2-2 5 5M16 8h.01',
+  key: 'M15 7a4 4 0 1 1-3.7 5.5L4 20v-4l2-2h3l2.3-2.3',
+  receipt: 'M6 3h12v18l-3-2-3 2-3-2-3 2V3Zm3 5h6m-6 4h6m-6 4h4',
+  store: 'M4 9h16l-2-5H6L4 9Zm1 0v11h14V9M9 20v-6h6v6',
 }
 
 export default function Icon({ name, size = 20 }: IconProps) {
