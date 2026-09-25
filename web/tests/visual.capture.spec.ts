@@ -31,6 +31,10 @@ for (const screen of visualQaScreens) {
         element.scrollTop = element.scrollHeight - element.clientHeight - 40
       })
       await expect(page.getByRole('button', { name: 'Manage categories' })).toBeVisible()
+    } else if (screen.id === 'receipt-results') {
+      await expect(page.getByText('เพิ่มแล้ว', { exact: true })).toBeVisible()
+      await expect(page.getByText('ซ้ำ ไม่ได้เพิ่ม', { exact: true })).toBeVisible()
+      await expect(page.getByText('ไม่สำเร็จ', { exact: true })).toBeVisible()
     } else {
       await page.evaluate(() => window.scrollTo(0, 0))
     }
