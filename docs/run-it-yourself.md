@@ -71,6 +71,8 @@ fvm flutter run --dart-define=WEB_APP_URL=http://10.0.2.2:5173
 
 Android emulators use `10.0.2.2` to reach the host. An iOS simulator can usually use `http://localhost:5173`. A physical device needs your development machine's LAN address. Start Vite with `pnpm dev --host 0.0.0.0` so the device can connect.
 
+In debug builds, raw AI provider responses are written through the Vite development server to `logs/ai-responses.jsonl`. The file keeps the latest 10 responses with UTC timestamps and is ignored by Git. It can contain personal or financial information from scanned documents. Release builds do not create this log.
+
 ## Build a release
 
 Release builds require an HTTPS web origin.

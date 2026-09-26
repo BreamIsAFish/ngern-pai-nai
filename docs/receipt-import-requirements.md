@@ -38,7 +38,7 @@ The feature supports purchase receipts and completed outgoing KBank or K PLUS tr
 - Cancelling stops active and queued work where possible. Transactions already added remain saved.
 - Do not run receipt imports as background jobs. If the app closes or is interrupted, keep completed transactions, cancel unfinished work, discard their images, and report the completed count when the app next opens.
 - Receipt images are temporary. Discard them when processing finishes or the results modal closes.
-- Do not persist raw model responses, confidence scores, image data, or full request payloads.
+- Do not persist raw model responses, confidence scores, image data, or full request payloads in release builds. Debug builds keep the latest 10 raw provider responses in the ignored repository file `logs/ai-responses.jsonl` for local error tracking.
 
 ## Extraction rules
 
@@ -103,7 +103,7 @@ Required actions:
 - Each failed receipt has **ลองใหม่**, and the modal has **ลองใหม่ทั้งหมด** for failed receipts.
 - Retrying reuses the temporary image only while the modal remains open. After it closes, the user must select the image again.
 
-Show clear Thai error messages and a provider request ID when available. Never display or log the API key, image data, full payload, or raw model response. Sanitized diagnostic logging is allowed in development builds.
+Show clear Thai error messages and a provider request ID when available. Never display or log the API key, image data, or full request payload. Debug builds may log the latest 10 raw provider responses with timestamps to the ignored local development log. Release builds must not create or send this log.
 
 ## Category behavior
 

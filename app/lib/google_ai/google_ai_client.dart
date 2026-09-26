@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../ai/ai_provider.dart';
+import '../ai/ai_response_logger.dart';
 import '../ai/receipt_ai_client.dart';
 import '../ai/receipt_ai_prompt.dart';
 import '../receipts/receipt_extraction.dart';
@@ -12,8 +13,10 @@ import '../receipts/receipt_extraction.dart';
 class GoogleAiClient implements ReceiptAiClient {
   GoogleAiClient({
     http.Client? client,
+    AiResponseLogger? responseLogger,
     List<Duration>? retryDelays,
   }) : _client = client ?? http.Client(),
+       _responseLogger = responseLogger ?? const AiResponseLogger.disabled(),
        _retryDelays =
            retryDelays ??
            const [
@@ -23,6 +26,7 @@ class GoogleAiClient implements ReceiptAiClient {
            ];
 
   final http.Client _client;
+  final AiResponseLogger _responseLogger;
   final List<Duration> _retryDelays;
 
   @override
@@ -58,6 +62,7 @@ class GoogleAiClient implements ReceiptAiClient {
     final response = await _postGenerateContent(
       apiKey: apiKey,
       model: model,
+      responseLogModel: model,
       body: {
         'systemInstruction': {
           'parts': [
@@ -112,6 +117,7 @@ class GoogleAiClient implements ReceiptAiClient {
     required String apiKey,
     required String model,
     required Map<String, dynamic> body,
+    String? responseLogModel,
   }) async {
     final uri = Uri.https(
       'generativelanguage.googleapis.com',
@@ -134,6 +140,15 @@ class GoogleAiClient implements ReceiptAiClient {
     final requestId =
         response.headers['x-goog-request-id'] ??
         response.headers['x-request-id'];
+    if (responseLogModel != null) {
+      await _responseLogger.write(
+        provider: AiProvider.googleAiStudio,
+        model: responseLogModel,
+        responseBody: response.body,
+        statusCode: response.statusCode,
+        requestId: requestId,
+      );
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AiRequestError(
         provider: AiProvider.googleAiStudio,

@@ -5,15 +5,19 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../ai/ai_provider.dart';
+import '../ai/ai_response_logger.dart';
 import '../ai/receipt_ai_client.dart';
 import '../ai/receipt_ai_prompt.dart';
 import '../receipts/receipt_extraction.dart';
 
 class OpenAiClient implements ReceiptAiClient {
-  OpenAiClient({http.Client? client}) : _client = client ?? http.Client();
+  OpenAiClient({http.Client? client, AiResponseLogger? responseLogger})
+    : _client = client ?? http.Client(),
+      _responseLogger = responseLogger ?? const AiResponseLogger.disabled();
 
   static final _responsesUri = Uri.parse('https://api.openai.com/v1/responses');
   final http.Client _client;
+  final AiResponseLogger _responseLogger;
 
   @override
   Future<void> validateKey({
@@ -42,6 +46,7 @@ class OpenAiClient implements ReceiptAiClient {
     final imageData = base64Encode(await image.readAsBytes());
     final response = await _postResponse(
       apiKey: apiKey,
+      responseLogModel: model,
       body: {
         'model': model,
         'store': false,
@@ -93,6 +98,7 @@ class OpenAiClient implements ReceiptAiClient {
   Future<_OpenAiResponse> _postResponse({
     required String apiKey,
     required Map<String, dynamic> body,
+    String? responseLogModel,
   }) async {
     http.Response response;
     try {
@@ -114,6 +120,15 @@ class OpenAiClient implements ReceiptAiClient {
       throw const AiNetworkError('เชื่อมต่อ OpenAI ไม่ได้');
     }
     final requestId = response.headers['x-request-id'];
+    if (responseLogModel != null) {
+      await _responseLogger.write(
+        provider: AiProvider.openAi,
+        model: responseLogModel,
+        responseBody: response.body,
+        statusCode: response.statusCode,
+        requestId: requestId,
+      );
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AiRequestError(
         provider: AiProvider.openAi,

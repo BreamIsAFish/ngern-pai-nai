@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'ai/ai_provider.dart';
+import 'ai/ai_response_logger.dart';
 import 'ai/ai_settings.dart';
 import 'ai/ai_settings_page.dart';
 import 'ai/receipt_ai_client.dart';
@@ -20,11 +21,14 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final config = AppConfig.fromEnvironment();
+  final aiResponseLogger = AiResponseLogger.forDevelopment(
+    webAppUri: config.webAppUri,
+  );
   final auth = GoogleAuthService();
   final sheets = SheetsGateway(auth: auth, store: SpreadsheetStore());
   final aiClients = <AiProvider, ReceiptAiClient>{
-    AiProvider.openAi: OpenAiClient(),
-    AiProvider.googleAiStudio: GoogleAiClient(),
+    AiProvider.openAi: OpenAiClient(responseLogger: aiResponseLogger),
+    AiProvider.googleAiStudio: GoogleAiClient(responseLogger: aiResponseLogger),
   };
   final aiSettings = AiSettingsStore();
   final receiptImages = ReceiptImageStore();
