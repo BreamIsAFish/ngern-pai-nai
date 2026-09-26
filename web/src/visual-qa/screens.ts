@@ -25,6 +25,8 @@ export const visualQaScreens: VisualQaScreen[] = [
   { id: 'tags', label: 'Tag manager', route: '/?visual=tags', referenceFile: 'IMG_1182.png', actualFile: 'tags.png', referenceAvailable: true },
   { id: 'add-tag', label: 'Add tag', route: '/?visual=add-tag', referenceFile: 'IMG_1183.png', actualFile: 'add-tag.png', referenceAvailable: true },
   { id: 'profile', label: 'Profile', route: '/?visual=profile', referenceFile: 'IMG_1184.png', actualFile: 'profile.png', referenceAvailable: true },
+  { id: 'receipt-source', label: 'Receipt / source chooser', route: '/?visual=receipt-source', referenceFile: 'No reference supplied', actualFile: 'receipt-source.png', referenceAvailable: false },
+  { id: 'receipt-results', label: 'Receipt / import results', route: '/?visual=receipt-results', referenceFile: 'No reference supplied', actualFile: 'receipt-results.png', referenceAvailable: false },
   { id: 'sheet-trash', label: 'Spreadsheet recovery', route: '/?visual=sheet-trash', referenceFile: 'No reference supplied', actualFile: 'sheet-trash.png', referenceAvailable: false },
 ]
 

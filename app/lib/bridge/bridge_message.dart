@@ -49,10 +49,15 @@ class BridgeResponse {
 }
 
 class BridgeError {
-  const BridgeError({required this.code, required this.message});
+  const BridgeError({required this.code, required this.message, this.data});
 
   final String code;
+  final Object? data;
   final String message;
 
-  Map<String, dynamic> toJson() => {'code': code, 'message': message};
+  Map<String, dynamic> toJson() => {
+    'code': code,
+    'message': message,
+    if (data != null) 'data': data,
+  };
 }

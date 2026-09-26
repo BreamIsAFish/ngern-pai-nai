@@ -1,14 +1,18 @@
 export type TransactionType = 'income' | 'expense' | 'transfer'
+export type TransactionSource = 'manual' | 'receipt_ai'
 
 export interface TransactionInput {
   date: string
   time: string
   type: TransactionType
-  category: string
+  category: string | null
   tag: string | null
   amount: number
   note: string
   destination: string | null
+  transactionNumber: string | null
+  source: TransactionSource
+  dateInferred: boolean
 }
 
 export interface Transaction extends TransactionInput {
@@ -26,6 +30,9 @@ export interface TransactionDraft {
   amount: number
   note: string
   destination: string | null
+  transactionNumber: string | null
+  source: TransactionSource
+  dateInferred: boolean
 }
 
 /** Converts an unknown native-bridge value into a validated transaction. */
@@ -40,11 +47,14 @@ export default function mapTransaction(value: unknown): Transaction {
     date: String(row.date ?? ''),
     time: String(row.time ?? ''),
     type,
-    category: String(row.category ?? (type === 'transfer' ? 'Transfer' : 'Other')),
+    category: typeof row.category === 'string' && row.category ? row.category : type === 'transfer' ? 'Transfer' : null,
     tag: typeof row.tag === 'string' && row.tag ? row.tag : null,
     amount,
     note: String(row.note ?? ''),
     destination: typeof row.destination === 'string' && row.destination ? row.destination : null,
+    transactionNumber: typeof row.transactionNumber === 'string' && row.transactionNumber ? row.transactionNumber : null,
+    source: row.source === 'receipt_ai' ? 'receipt_ai' : 'manual',
+    dateInferred: row.dateInferred === true,
     createdAt: String(row.createdAt ?? ''),
     updatedAt: String(row.updatedAt ?? ''),
   }

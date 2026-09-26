@@ -19,7 +19,7 @@ export default function validateTransaction(input: TransactionDraft, now = new D
   if (!Number.isFinite(input.amount) || input.amount <= 0) {
     errors.amount = 'Enter an amount greater than zero.'
   }
-  if (!input.category.trim()) {
+  if (input.source === 'manual' && !input.category.trim()) {
     errors.category = 'Choose a category.'
   }
   if (!isWithinCharacterLimit({ value: input.note, limit: 160 })) {

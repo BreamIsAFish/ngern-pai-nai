@@ -6,15 +6,22 @@ import '../ui/config_error_view.dart';
 import '../webview/webview_page.dart';
 
 class NgernPaiNaiApp extends StatelessWidget {
-  const NgernPaiNaiApp({required this.bridge, required this.config, super.key});
+  const NgernPaiNaiApp({
+    required this.bridge,
+    required this.config,
+    required this.navigatorKey,
+    super.key,
+  });
 
   final BridgeController bridge;
   final AppConfig config;
+  final GlobalKey<NavigatorState> navigatorKey;
 
   @override
   Widget build(BuildContext context) {
     final webAppUri = config.webAppUri;
     return MaterialApp(
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'Ngern Pai Nai',
       theme: ThemeData(

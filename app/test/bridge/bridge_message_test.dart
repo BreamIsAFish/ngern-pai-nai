@@ -35,4 +35,20 @@ void main() {
       'error': {'code': 'UNEXPECTED', 'message': 'Please try again.'},
     });
   });
+
+  test('failure responses can include structured recovery data', () {
+    const response = BridgeResponse.failure(
+      id: 'request-duplicate',
+      error: BridgeError(
+        code: 'RECEIPT_DUPLICATE',
+        message: 'พบรายการซ้ำ',
+        data: {'id': 'tx-existing'},
+      ),
+    );
+
+    expect(
+      response.toJson()['error'],
+      containsPair('data', {'id': 'tx-existing'}),
+    );
+  });
 }

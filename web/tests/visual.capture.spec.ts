@@ -31,6 +31,10 @@ for (const screen of visualQaScreens) {
         element.scrollTop = element.scrollHeight - element.clientHeight - 40
       })
       await expect(page.getByRole('button', { name: 'Manage categories' })).toBeVisible()
+    } else if (screen.id === 'receipt-results') {
+      await expect(page.getByText('เพิ่มแล้ว', { exact: true })).toBeVisible()
+      await expect(page.getByText('ซ้ำ ไม่ได้เพิ่ม', { exact: true })).toBeVisible()
+      await expect(page.getByText('ไม่สำเร็จ', { exact: true })).toBeVisible()
     } else {
       await page.evaluate(() => window.scrollTo(0, 0))
     }
@@ -194,7 +198,7 @@ test('keeps May and August fully visible without moving the Home month arrows', 
   expect(await nextMonth.evaluate((element) => element.getBoundingClientRect().x)).toBe(initialNextX)
 })
 
-test('keeps the Home navigation fixed without extra space after the transaction list', async ({ page }) => {
+test('keeps the Home navigation fixed and reserves space for the entry actions', async ({ page }) => {
   await page.goto('/')
   const navigation = page.locator('.bottom-nav')
   const viewportHeight = await page.evaluate(() => window.innerHeight)
@@ -202,12 +206,17 @@ test('keeps the Home navigation fixed without extra space after the transaction 
 
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
   expect(await navigation.evaluate((element) => Math.round(element.getBoundingClientRect().bottom))).toBe(viewportHeight)
-  const contentGap = await page.locator('.date-group').last().evaluate((element) => {
-    const navigationTop = document.querySelector('.bottom-nav')?.getBoundingClientRect().top ?? window.innerHeight
-    return Math.round(navigationTop - element.getBoundingClientRect().bottom)
+  const layout = await page.locator('.date-group').last().evaluate((element) => {
+    const contentBottom = element.getBoundingClientRect().bottom
+    const actions = document.querySelector('.entry-fabs')?.getBoundingClientRect()
+    return {
+      actionHeight: Math.round(actions?.height ?? 0),
+      contentClearance: Math.round((actions?.top ?? window.innerHeight) - contentBottom),
+    }
   })
-  expect(contentGap).toBeGreaterThanOrEqual(0)
-  expect(contentGap).toBeLessThanOrEqual(20)
+  expect(layout.actionHeight).toBe(109)
+  expect(layout.contentClearance).toBeGreaterThanOrEqual(0)
+  expect(layout.contentClearance).toBeLessThanOrEqual(20)
 })
 
 test('requires a category and accepts only numeric amount input for a new entry', async ({ page }) => {
@@ -284,6 +293,45 @@ test('accepts Thai text in categories, tags, and transaction notes', async ({ pa
   await page.getByRole('dialog', { name: 'Choose category / tag' }).getByRole('button', { name: 'Food', exact: true }).click()
   await page.getByRole('button', { name: 'Save' }).click()
   await expect(page.getByText('ข้าวกลางวันกับแม่')).toBeVisible()
+})
+
+test('closes the editor immediately and rolls an edited transaction back when saving fails', async ({ page }) => {
+  await page.goto('/?visual=edit-transaction-update-error')
+  await page.getByRole('button', { name: 'Category, Food' }).click()
+  await page.getByRole('dialog', { name: 'Choose category / tag' }).getByRole('button', { name: 'Transport', exact: true }).click()
+  await page.getByRole('button', { name: 'Save' }).click()
+
+  await expect(page.locator('.transaction-screen')).toBeHidden({ timeout: 200 })
+  await expect(page.getByRole('button', { name: /Transport Lunch with May/ })).toBeVisible({ timeout: 200 })
+  await expect(page.getByRole('alert')).toContainText('Could not update transaction.')
+  await expect(page.getByRole('button', { name: /Food Lunch with May/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Transport Lunch with May/ })).toBeHidden()
+})
+
+test('adds a transaction to Home immediately and removes it when creation fails', async ({ page }) => {
+  await page.goto('/?visual=add-expense-create-error')
+  await page.getByRole('textbox', { name: 'Amount' }).fill('321')
+  await page.getByPlaceholder('Add note').fill('Optimistic lunch')
+  await page.getByRole('button', { name: 'Choose category' }).click()
+  await page.getByRole('dialog', { name: 'Choose category / tag' }).getByRole('button', { name: 'Food', exact: true }).click()
+  await page.getByRole('button', { name: 'Save' }).click()
+
+  await expect(page.locator('.transaction-screen')).toBeHidden({ timeout: 200 })
+  await expect(page.getByRole('button', { name: /Food Optimistic lunch/ })).toBeVisible({ timeout: 200 })
+  await expect(page.getByRole('alert')).toContainText('Could not create transaction.')
+  await expect(page.getByRole('button', { name: /Food Optimistic lunch/ })).toBeHidden()
+})
+
+test('removes a transaction from Home immediately and restores it when deletion fails', async ({ page }) => {
+  await page.goto('/?visual=edit-transaction-delete-error')
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('button', { name: 'More' }).click()
+  await page.getByRole('button', { name: 'Delete transaction' }).click()
+
+  await expect(page.locator('.transaction-screen')).toBeHidden({ timeout: 200 })
+  await expect(page.getByRole('button', { name: /Food Lunch with May/ })).toBeHidden({ timeout: 200 })
+  await expect(page.getByRole('alert')).toContainText('Could not delete transaction.')
+  await expect(page.getByRole('button', { name: /Food Lunch with May/ })).toBeVisible()
 })
 
 test('matches the compact MeowJot header geometry on category and entry screens', async ({ page }) => {

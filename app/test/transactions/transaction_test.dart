@@ -19,6 +19,40 @@ void main() {
       expect(transaction.type, TransactionType.expense);
       expect(transaction.tag, isNull);
       expect(transaction.destination, isNull);
+      expect(transaction.source, TransactionSource.manual);
+      expect(transaction.dateInferred, isFalse);
+    });
+
+    test('allows a receipt import to have no category', () {
+      final transaction = TransactionInput.fromJson({
+        'date': '2025-09-17',
+        'time': '05:30:00',
+        'type': 'expense',
+        'amount': 120.5,
+        'category': null,
+        'source': 'receipt_ai',
+        'transactionNumber': 'TX-123',
+        'dateInferred': true,
+      });
+
+      expect(transaction.category, isNull);
+      expect(transaction.source, TransactionSource.receiptAi);
+      expect(transaction.transactionNumber, 'TX-123');
+      expect(transaction.dateInferred, isTrue);
+    });
+
+    test('requires receipt imports to remain expenses', () {
+      expect(
+        () => TransactionInput.fromJson({
+          'date': '2025-09-17',
+          'time': '05:30:00',
+          'type': 'income',
+          'amount': 120.5,
+          'category': null,
+          'source': 'receipt_ai',
+        }),
+        throwsFormatException,
+      );
     });
 
     test('rejects zero amounts and missing categories', () {
@@ -65,6 +99,9 @@ void main() {
         '500',
         'Birthday',
         '',
+        '',
+        'manual',
+        false,
         '2025-09-17T01:00:00.000Z',
         '2025-09-17T02:00:00.000Z',
       ]);
