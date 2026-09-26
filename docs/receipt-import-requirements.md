@@ -2,9 +2,9 @@
 
 ## Scope
 
-Prototype 2 lets users select OpenAI or Google AI Studio, provide their own API key, select Thai receipt images, and import extracted transactions into the app's Google Sheet.
+Prototype 2 lets users select OpenAI or Google AI Studio, provide their own API key, select Thai receipt or supported bank-slip images, and import extracted transactions into the app's Google Sheet.
 
-The feature supports purchase receipts only. Each image must contain exactly one receipt and produces at most one expense transaction. Multi-page receipts, images containing multiple receipts, refunds, cancellation slips, non-THB receipts, and ambiguous currencies are unsupported.
+The feature supports purchase receipts and completed outgoing KBank or K PLUS transaction slips. Supported KBank slips include account and PromptPay transfers, QR payments, merchant or service payments, bill payments, and top-ups. Each image must contain exactly one document and produces at most one expense transaction. Multi-page documents, images containing multiple documents, refunds, cancellations, reversals, pending or failed transactions, incoming transfers, non-THB transactions, and ambiguous currencies are unsupported.
 
 ## AI provider settings
 
@@ -42,18 +42,20 @@ The feature supports purchase receipts only. Each image must contain exactly one
 
 ## Extraction rules
 
-A receipt is valid only when the model identifies a clear, positive THB grand total. The grand total is the amount actually paid after discounts, tax, and service charges. Do not use subtotal, cash tendered, change, card authorization values, or loyalty points.
+A purchase receipt is valid only when the model identifies a clear, positive THB grand total. The grand total is the amount actually paid after discounts, tax, and service charges. Do not use subtotal, cash tendered, change, card authorization values, or loyalty points.
+
+A KBank or K PLUS slip is valid when it shows a completed outgoing transaction with a clear, positive THB amount. Use the transferred, paid, or topped-up amount. Do not accept incoming funds, pending transactions, failed transactions, cancellations, reversals, or refunds.
 
 Extract and map these fields:
 
 | Extracted value | Transaction field | Rule |
 | --- | --- | --- |
-| Merchant or store name | `destination` | Optional. Leave empty when unreadable. |
-| Short purchase summary | `note` | Optional Thai text, limited to 100 characters. Use only visible item information; do not invent a generic summary. |
-| Grand total | `amount` | Required, positive, and THB. |
+| Merchant, store, or KBank recipient name | `destination` | Optional. For a KBank slip, use the recipient, merchant, service provider, or biller. Never use the sender or bank name. Leave empty when unreadable. |
+| Short purchase or transaction summary | `note` | Optional Thai text, limited to 100 characters. Use only visible item or transaction information. |
+| Grand total or outgoing transaction amount | `amount` | Required, positive, and THB. |
 | Receipt date | `date` | Accept Buddhist or Gregorian years and convert to the app's stored format. Do not guess ambiguous dates. |
 | Receipt time | `time` | Optional. |
-| Transaction number (`เลขที่รายการ`) | `transaction_number` | Optional. Do not substitute invoice numbers, approval codes, tax IDs, phone numbers, card fragments, or other identifiers. |
+| Transaction number (`เลขที่รายการ`) | `transaction_number` | Optional. For a KBank slip, accept its transaction or reference number. Do not substitute invoice numbers, approval codes, tax IDs, account numbers, phone numbers, or card fragments. |
 
 Additional transaction values are fixed:
 
@@ -139,7 +141,7 @@ The schema upgrade intentionally resets existing transaction data:
 ## Acceptance criteria
 
 - A user with a verified key can import one to ten Thai receipt images and see each result independently.
-- Every valid, non-duplicate receipt is saved immediately as an uncategorized expense in the correct transaction worksheet.
+- Every valid, non-duplicate purchase receipt or supported KBank slip is saved immediately as an uncategorized expense in the correct transaction worksheet.
 - A failure, cancellation, or duplicate never creates a transaction.
 - A batch may partially succeed without rolling back successful transactions.
 - Duplicate receipts are blocked both against existing data and within the active batch.

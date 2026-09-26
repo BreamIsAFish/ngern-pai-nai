@@ -30,6 +30,26 @@ void main() {
       expect(prepared.warnings, isEmpty);
     });
 
+    test('maps a completed KBank transfer slip to an expense', () {
+      final prepared = prepareReceiptTransaction(
+        extraction: receipt(
+          merchantName: 'สมชาย ใจดี',
+          note: 'โอนเงินผ่าน K PLUS',
+          amount: 450,
+          receiptDate: '2026-09-20',
+          receiptTime: '13:45:12',
+          transactionNumber: 'KBANK-REF-123',
+        ),
+        now: DateTime(2026, 9, 25, 10),
+      );
+
+      expect(prepared.transaction.type, TransactionType.expense);
+      expect(prepared.transaction.destination, 'สมชาย ใจดี');
+      expect(prepared.transaction.note, 'โอนเงินผ่าน K PLUS');
+      expect(prepared.transaction.amount, 450);
+      expect(prepared.transaction.transactionNumber, 'KBANK-REF-123');
+    });
+
     test('converts a Buddhist year and uses local noon without a time', () {
       final prepared = prepareReceiptTransaction(
         extraction: receipt(receiptDate: '2569-09-20', transactionNumber: '42'),
