@@ -1,5 +1,6 @@
-import '../openai/open_ai_client.dart';
-import '../openai/open_ai_settings.dart';
+import '../ai/ai_provider.dart';
+import '../ai/ai_settings.dart';
+import '../ai/receipt_ai_client.dart';
 import '../sheets/sheets_gateway.dart';
 import '../transactions/transaction.dart';
 import 'receipt_batch_progress_store.dart';
@@ -8,23 +9,23 @@ import 'prepare_receipt_transaction.dart';
 
 class ReceiptImportService {
   const ReceiptImportService({
-    required this.client,
+    required this.clients,
     required this.images,
     required this.progress,
     required this.settings,
     required this.sheets,
   });
 
-  final OpenAiClient client;
+  final Map<AiProvider, ReceiptAiClient> clients;
   final ReceiptImageStore images;
   final ReceiptBatchProgressStore progress;
-  final OpenAiSettingsStore settings;
+  final AiSettingsStore settings;
   final SheetsGateway sheets;
 
   Future<ReceiptImageSelection> pick(ReceiptImageSource source) async {
     final current = await settings.read();
     if (!current.hasKey || !current.isVerified) {
-      throw const OpenAiNotConfigured();
+      throw const AiNotConfigured();
     }
     final selection = await images.pick(source);
     if (!selection.cancelled) await progress.begin(selection.batchId!);
@@ -38,10 +39,12 @@ class ReceiptImportService {
     try {
       final image = images.requireImage(batchId: batchId, imageId: imageId);
       final current = await settings.read();
-      final apiKey = await settings.readApiKey();
+      final apiKey = await settings.readApiKey(current.provider);
       if (!current.isVerified || apiKey == null) {
-        throw const OpenAiNotConfigured();
+        throw const AiNotConfigured();
       }
+      final client = clients[current.provider];
+      if (client == null) throw const AiNotConfigured();
       final extraction = await client.extractReceipt(
         apiKey: apiKey,
         model: current.model,
@@ -69,20 +72,20 @@ class ReceiptImportService {
       ).toJson();
     } on ReceiptBatchCancelled {
       return const ReceiptImportOutcome.cancelled().toJson();
-    } on OpenAiRequestError catch (error) {
+    } on AiRequestError catch (error) {
       return ReceiptImportOutcome.failed(
         message: error.thaiMessage,
         requestId: error.requestId,
       ).toJson();
-    } on OpenAiNetworkError catch (error) {
+    } on AiNetworkError catch (error) {
       return ReceiptImportOutcome.failed(message: error.message).toJson();
-    } on OpenAiInvalidImage {
+    } on AiInvalidImage {
       return const ReceiptImportOutcome.failed(
         message: 'รองรับเฉพาะรูป JPG, PNG, WEBP หรือ GIF',
       ).toJson();
-    } on OpenAiInvalidResponse catch (error) {
+    } on AiInvalidResponse catch (error) {
       return ReceiptImportOutcome.failed(
-        message: 'OpenAI ส่งข้อมูลใบเสร็จที่อ่านไม่ได้',
+        message: '${error.provider.displayName} ส่งข้อมูลใบเสร็จที่อ่านไม่ได้',
         requestId: error.requestId,
       ).toJson();
     } on ReceiptDataInvalid catch (error) {
@@ -147,6 +150,6 @@ class ReceiptImportOutcome {
   };
 }
 
-class OpenAiNotConfigured implements Exception {
-  const OpenAiNotConfigured();
+class AiNotConfigured implements Exception {
+  const AiNotConfigured();
 }

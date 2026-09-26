@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import bridge from '../bridge/client'
 import { BridgeRequestError } from '../bridge/createNativeBridge'
 import createLatestRequestScheduler from '../bridge/createLatestRequestScheduler'
-import type { AppStatus, OpenAiStatus, ReceiptImageSelection } from '../bridge/types'
+import type { AiStatus, AppStatus, ReceiptImageSelection } from '../bridge/types'
 import CategoryManager from '../categories/CategoryManager'
 import mapCategory, { type Category } from '../categories/model'
 import DashboardPage from '../dashboard/DashboardPage'
@@ -34,7 +34,7 @@ export default function App() {
         : visualState === 'tags' || visualState === 'add-tag' ? 'tags'
           : visualState === 'profile' ? 'profile' : 'home'
   const [status, setStatus] = useState<AppStatus>()
-  const [openAiStatus, setOpenAiStatus] = useState<OpenAiStatus>()
+  const [aiStatus, setAiStatus] = useState<AiStatus>()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [tags, setTags] = useState<Tag[]>([])
@@ -76,7 +76,7 @@ export default function App() {
     try {
       const interrupted = await bridge.request('receipts.takeInterrupted', {})
       if (interrupted.completed > 0) setNotice(`เพิ่มรายการจากใบเสร็จก่อนแอปปิดสำเร็จ ${interrupted.completed} รายการ`)
-      setOpenAiStatus(await bridge.request('openai.getStatus', {}))
+      setAiStatus(await bridge.request('ai.getStatus', {}))
       let nextStatus = await bridge.request('app.getStatus', {})
       if (nextStatus.signedIn) nextStatus = await bridge.request('sheet.bootstrap', {})
       setStatus(nextStatus)
@@ -120,27 +120,27 @@ export default function App() {
     finally { setBusy(false) }
   }
 
-  const manageOpenAi = async () => {
-    try { setOpenAiStatus(await bridge.request('openai.openSettings', {})) }
-    catch (caught) { setError(caught instanceof Error ? caught.message : 'เปิดการตั้งค่า OpenAI ไม่ได้') }
+  const manageAi = async () => {
+    try { setAiStatus(await bridge.request('ai.openSettings', {})) }
+    catch (caught) { setError(caught instanceof Error ? caught.message : 'เปิดการตั้งค่าผู้ให้บริการ AI ไม่ได้') }
   }
 
   const selectReceiptSource = async (source: 'camera' | 'gallery') => {
     setReceiptSourceOpen(false); setError(undefined)
     try {
-      let current = openAiStatus ?? await bridge.request('openai.getStatus', {})
+      let current = aiStatus ?? await bridge.request('ai.getStatus', {})
       if (!current.verified) {
-        setNotice('ตั้งค่าและตรวจสอบ OpenAI API key ก่อนสแกนใบเสร็จ')
-        current = await bridge.request('openai.openSettings', {})
-        setOpenAiStatus(current)
+        setNotice('ตั้งค่าและตรวจสอบ API key ของผู้ให้บริการ AI ก่อนสแกนใบเสร็จ')
+        current = await bridge.request('ai.openSettings', {})
+        setAiStatus(current)
         if (!current.verified) return
       }
       if (!current.privacyNoticeSeen) {
-        const accepted = window.confirm('รูปใบเสร็จจะถูกส่งไปยัง OpenAI เพื่ออ่านข้อมูล รูปจะไม่ถูกเก็บหลังประมวลผล ต้องการดำเนินการต่อหรือไม่?')
+        const accepted = window.confirm(`รูปใบเสร็จจะถูกส่งไปยัง ${current.providerName} เพื่ออ่านข้อมูล รูปจะไม่ถูกเก็บหลังประมวลผล ต้องการดำเนินการต่อหรือไม่?`)
         if (!accepted) return
         await bridge.request('receipts.acceptPrivacy', {})
         current = { ...current, privacyNoticeSeen: true }
-        setOpenAiStatus(current)
+        setAiStatus(current)
       }
       const selection = await bridge.request('receipts.pick', { source })
       if (!selection.cancelled && selection.batchId) {
@@ -224,7 +224,7 @@ export default function App() {
       {error && <button className="toast" onClick={() => setError(undefined)} type="button">{error}<span>Dismiss</span></button>}
       {notice && <button className="toast notice" onClick={() => setNotice(undefined)} type="button">{notice}<span>Dismiss</span></button>}
       {screen === 'home' && <DashboardPage categories={categories} latestMonth={localDateValue().slice(0, 7)} loading={monthLoading} month={month} monthPickerOpenInitially={visualState === 'home-month-picker'} onAdd={() => setEditing(null)} onChangeMonth={changeMonth} onEdit={setEditing} onOpenProfile={() => setScreen('profile')} onOpenSearch={() => setScreen('search')} onOpenSummary={() => setScreen('summary')} onRefresh={() => void refresh()} onScanReceipt={() => setReceiptSourceOpen(true)} refreshing={refreshing} showCoach={!visualState || visualState === 'home-dashboard' || visualState === 'home-month-picker'} transactions={visibleTransactions} />}
-      {screen === 'profile' && <SettingsPage busy={busy} onDisconnect={() => void disconnect()} onHome={() => setScreen('home')} onManageOpenAi={() => void manageOpenAi()} onManageSheet={() => setScreen('sheet')} onManageCategories={() => setScreen('categories')} onManageTags={() => { setTagManagerAdding(false); setScreen('tags') }} openAiStatus={openAiStatus} status={status} />}
+      {screen === 'profile' && <SettingsPage aiStatus={aiStatus} busy={busy} onDisconnect={() => void disconnect()} onHome={() => setScreen('home')} onManageAi={() => void manageAi()} onManageSheet={() => setScreen('sheet')} onManageCategories={() => setScreen('categories')} onManageTags={() => { setTagManagerAdding(false); setScreen('tags') }} status={status} />}
       {screen === 'sheet' && <GoogleSheetPage onBack={() => setScreen('profile')} onRefresh={() => void refreshSheetAccount()} refreshing={refreshing} status={status} />}
       {screen === 'summary' && <SummaryPage categories={categories} initialView={visualState === 'summary-categories' ? 'list' : 'chart'} latestMonth={localDateValue().slice(0, 7)} loading={monthLoading} month={month} monthPickerOpenInitially={visualState === 'summary-month-picker'} onBack={() => setScreen('home')} onChangeMonth={changeMonth} transactions={transactions} />}
       {screen === 'search' && <SearchPage categories={categories} fetchTransactions={fetchTransactions} onBack={() => setScreen('home')} onEdit={(item) => setEditing(item)} visualKeyboard={visualState === 'search'} />}

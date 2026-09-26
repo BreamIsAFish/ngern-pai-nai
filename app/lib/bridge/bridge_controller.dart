@@ -2,9 +2,10 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import '../ai/ai_provider.dart';
+import '../ai/ai_settings.dart';
 import '../auth/google_auth_service.dart';
 import '../categories/category.dart';
-import '../openai/open_ai_settings.dart';
 import '../receipts/receipt_image_store.dart';
 import '../receipts/receipt_import_service.dart';
 import '../receipts/receipt_batch_progress_store.dart';
@@ -17,21 +18,21 @@ class BridgeController {
   const BridgeController({
     required GoogleAuthService auth,
     required SheetsGateway sheets,
-    OpenAiSettingsStore? openAiSettings,
-    Future<void> Function()? openOpenAiSettings,
+    AiSettingsStore? aiSettings,
+    Future<void> Function()? openSettings,
     ReceiptImportService? receiptImports,
     ReceiptBatchProgressStore? receiptProgress,
   }) : _auth = auth,
        _sheets = sheets,
-       _openAiSettings = openAiSettings,
-       _openOpenAiSettings = openOpenAiSettings,
+       _aiSettings = aiSettings,
+       _openSettings = openSettings,
        _receiptImports = receiptImports,
        _receiptProgress = receiptProgress;
 
   final GoogleAuthService _auth;
   final SheetsGateway _sheets;
-  final OpenAiSettingsStore? _openAiSettings;
-  final Future<void> Function()? _openOpenAiSettings;
+  final AiSettingsStore? _aiSettings;
+  final Future<void> Function()? _openSettings;
   final ReceiptImportService? _receiptImports;
   final ReceiptBatchProgressStore? _receiptProgress;
 
@@ -72,11 +73,11 @@ class BridgeController {
         'SHEET_FORMAT_INVALID',
         'A Sheet tab has unexpected columns. Fix its header before continuing.',
       );
-    } on OpenAiNotConfigured {
+    } on AiNotConfigured {
       return _failure(
         requestId,
-        'OPENAI_NOT_CONFIGURED',
-        'ตั้งค่าและตรวจสอบ OpenAI API key ก่อน',
+        'AI_NOT_CONFIGURED',
+        'ตั้งค่าและตรวจสอบ API key ของผู้ให้บริการ AI ก่อน',
       );
     } on TransactionNotFound {
       return _failure(
@@ -139,8 +140,8 @@ class BridgeController {
       'sheet.restore' => _restoreSheet(),
       'sheet.createReplacement' => _createReplacementSheet(),
       'sheet.resetTransactions' => _resetTransactions(),
-      'openai.getStatus' => _openAiStatus(),
-      'openai.openSettings' => _showOpenAiSettings(),
+      'ai.getStatus' => _aiStatus(),
+      'ai.openSettings' => _showAiSettings(),
       'receipts.acceptPrivacy' => _acceptReceiptPrivacy(),
       'receipts.pick' => _pickReceipts(request.payload),
       'receipts.process' => _processReceipt(request.payload),
@@ -211,13 +212,15 @@ class BridgeController {
     return _status();
   }
 
-  Future<Map<String, dynamic>> _openAiStatus() async {
-    final store = _openAiSettings;
+  Future<Map<String, dynamic>> _aiStatus() async {
+    final store = _aiSettings;
     if (store == null) {
       return {
+        'provider': AiProvider.openAi.id,
+        'providerName': AiProvider.openAi.displayName,
         'configured': false,
         'verified': false,
-        'model': OpenAiSettingsStore.defaultModel,
+        'model': AiProvider.openAi.defaultModel,
         'privacyNoticeSeen': false,
       };
     }
@@ -228,7 +231,7 @@ class BridgeController {
   }
 
   Future<Map<String, dynamic>> _acceptReceiptPrivacy() async {
-    final store = _openAiSettings;
+    final store = _aiSettings;
     if (store == null) throw const FormatException('Settings unavailable.');
     await store.markPrivacyNoticeSeen();
     return {'accepted': true};
@@ -276,11 +279,11 @@ class BridgeController {
     return {'completed': await progress?.takeInterruptedCount() ?? 0};
   }
 
-  Future<Map<String, dynamic>> _showOpenAiSettings() async {
-    final open = _openOpenAiSettings;
+  Future<Map<String, dynamic>> _showAiSettings() async {
+    final open = _openSettings;
     if (open == null) throw const FormatException('Settings unavailable.');
     await open();
-    return _openAiStatus();
+    return _aiStatus();
   }
 
   Future<Map<String, dynamic>> _restoreSheet() async {

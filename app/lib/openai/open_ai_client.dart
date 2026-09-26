@@ -4,14 +4,18 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
+import '../ai/ai_provider.dart';
+import '../ai/receipt_ai_client.dart';
+import '../ai/receipt_ai_prompt.dart';
 import '../receipts/receipt_extraction.dart';
 
-class OpenAiClient {
+class OpenAiClient implements ReceiptAiClient {
   OpenAiClient({http.Client? client}) : _client = client ?? http.Client();
 
   static final _responsesUri = Uri.parse('https://api.openai.com/v1/responses');
   final http.Client _client;
 
+  @override
   Future<void> validateKey({
     required String apiKey,
     required String model,
@@ -27,13 +31,14 @@ class OpenAiClient {
     );
   }
 
+  @override
   Future<ReceiptExtraction> extractReceipt({
     required String apiKey,
     required String model,
     required File image,
   }) async {
-    final mimeType = _imageMimeType(image.path);
-    if (mimeType == null) throw const OpenAiInvalidImage();
+    final mimeType = receiptImageMimeType(image.path);
+    if (mimeType == null) throw const AiInvalidImage();
     final imageData = base64Encode(await image.readAsBytes());
     final response = await _postResponse(
       apiKey: apiKey,
@@ -41,15 +46,12 @@ class OpenAiClient {
         'model': model,
         'store': false,
         'max_output_tokens': 800,
-        'instructions': _receiptInstructions,
+        'instructions': receiptInstructions,
         'input': [
           {
             'role': 'user',
             'content': [
-              {
-                'type': 'input_text',
-                'text': 'อ่านใบเสร็จภาษาไทยหนึ่งใบจากรูปนี้',
-              },
+              {'type': 'input_text', 'text': receiptImagePrompt},
               {
                 'type': 'input_image',
                 'image_url': 'data:$mimeType;base64,$imageData',
@@ -63,7 +65,7 @@ class OpenAiClient {
             'type': 'json_schema',
             'name': 'thai_receipt',
             'strict': true,
-            'schema': _receiptSchema,
+            'schema': receiptSchema,
           },
         },
       },
@@ -81,7 +83,10 @@ class OpenAiClient {
         jsonDecode(outputText['text'] as String) as Map<String, dynamic>,
       );
     } catch (_) {
-      throw OpenAiInvalidResponse(requestId: response.requestId);
+      throw AiInvalidResponse(
+        provider: AiProvider.openAi,
+        requestId: response.requestId,
+      );
     }
   }
 
@@ -102,15 +107,16 @@ class OpenAiClient {
           )
           .timeout(const Duration(seconds: 60));
     } on TimeoutException {
-      throw const OpenAiNetworkError('หมดเวลารอการตอบกลับจาก OpenAI');
+      throw const AiNetworkError('หมดเวลารอการตอบกลับจาก OpenAI');
     } on SocketException {
-      throw const OpenAiNetworkError('เชื่อมต่อ OpenAI ไม่ได้');
+      throw const AiNetworkError('เชื่อมต่อ OpenAI ไม่ได้');
     } on http.ClientException {
-      throw const OpenAiNetworkError('เชื่อมต่อ OpenAI ไม่ได้');
+      throw const AiNetworkError('เชื่อมต่อ OpenAI ไม่ได้');
     }
     final requestId = response.headers['x-request-id'];
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw OpenAiRequestError(
+      throw AiRequestError(
+        provider: AiProvider.openAi,
         statusCode: response.statusCode,
         requestId: requestId,
       );
@@ -121,108 +127,16 @@ class OpenAiClient {
         requestId: requestId,
       );
     } catch (_) {
-      throw OpenAiInvalidResponse(requestId: requestId);
+      throw AiInvalidResponse(
+        provider: AiProvider.openAi,
+        requestId: requestId,
+      );
     }
   }
-}
-
-const _receiptInstructions = '''
-อ่านเฉพาะใบเสร็จซื้อสินค้าหรือบริการภาษาไทยหนึ่งใบจากรูป ห้ามเดาข้อมูลที่อ่านไม่ออก
-- valid_purchase เป็น true เฉพาะใบเสร็จซื้อปกติที่มีเงินรวมสุทธิเป็นเงินบาทชัดเจน
-- amount คือยอดสุทธิที่จ่ายจริงหลังส่วนลด ภาษี และค่าบริการ ห้ามใช้ยอดก่อนรวม เงินสดรับ เงินทอน รหัสอนุมัติ หรือคะแนนสะสม
-- currency ต้องเป็น THB เมื่อระบุสกุลเงินได้ชัดเจน มิฉะนั้นเป็น null
-- receipt_date ใช้รูปแบบ YYYY-MM-DD และแปลงปีพุทธศักราชเป็นคริสต์ศักราช หากอ่านไม่ได้หรือกำกวมให้เป็น null
-- receipt_time ใช้รูปแบบ HH:mm:ss หากไม่มีเวลาให้เป็น null
-- transaction_number ใช้เฉพาะเลขที่รายการ ห้ามใช้เลขใบกำกับภาษี เลขใบเสร็จ รหัสอนุมัติ เลขผู้เสียภาษี เบอร์โทร หรือเลขบัตร
-- merchant_name คือชื่อร้านหรือผู้ขาย
-- note เป็นสรุปรายการสินค้าที่มองเห็นได้เป็นภาษาไทยไม่เกิน 100 ตัวอักษร หากอ่านรายการไม่ได้ให้เป็น null
-- หากเป็นเอกสารคืนเงิน ยกเลิก หลายใบในรูปเดียว หรือไม่ใช่ใบเสร็จซื้อปกติ ให้ valid_purchase เป็น false
-''';
-
-const _receiptSchema = {
-  'type': 'object',
-  'additionalProperties': false,
-  'properties': {
-    'valid_purchase': {'type': 'boolean'},
-    'unsupported_reason': {
-      'type': ['string', 'null'],
-    },
-    'merchant_name': {
-      'type': ['string', 'null'],
-    },
-    'note': {
-      'type': ['string', 'null'],
-    },
-    'amount': {
-      'type': ['number', 'null'],
-    },
-    'currency': {
-      'type': ['string', 'null'],
-    },
-    'receipt_date': {
-      'type': ['string', 'null'],
-    },
-    'receipt_time': {
-      'type': ['string', 'null'],
-    },
-    'transaction_number': {
-      'type': ['string', 'null'],
-    },
-  },
-  'required': [
-    'valid_purchase',
-    'unsupported_reason',
-    'merchant_name',
-    'note',
-    'amount',
-    'currency',
-    'receipt_date',
-    'receipt_time',
-    'transaction_number',
-  ],
-};
-
-String? _imageMimeType(String path) {
-  final extension = path.split('.').last.toLowerCase();
-  return const {
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'png': 'image/png',
-    'webp': 'image/webp',
-    'gif': 'image/gif',
-  }[extension];
 }
 
 class _OpenAiResponse {
   const _OpenAiResponse({required this.body, required this.requestId});
   final Map<String, dynamic> body;
-  final String? requestId;
-}
-
-class OpenAiNetworkError implements Exception {
-  const OpenAiNetworkError(this.message);
-  final String message;
-}
-
-class OpenAiRequestError implements Exception {
-  const OpenAiRequestError({required this.statusCode, this.requestId});
-  final String? requestId;
-  final int statusCode;
-
-  String get thaiMessage => switch (statusCode) {
-    401 => 'API key ไม่ถูกต้อง',
-    403 => 'บัญชีนี้ไม่มีสิทธิ์ใช้โมเดลที่เลือก',
-    429 => 'OpenAI ปฏิเสธคำขอเนื่องจากโควต้าหรือคำขอมากเกินไป',
-    >= 500 => 'OpenAI ขัดข้องชั่วคราว',
-    _ => 'OpenAI ไม่สามารถประมวลผลคำขอนี้ได้',
-  };
-}
-
-class OpenAiInvalidImage implements Exception {
-  const OpenAiInvalidImage();
-}
-
-class OpenAiInvalidResponse implements Exception {
-  const OpenAiInvalidResponse({this.requestId});
   final String? requestId;
 }

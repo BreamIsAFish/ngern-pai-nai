@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:ngern_pai_nai/ai/receipt_ai_client.dart';
+import 'package:ngern_pai_nai/ai/receipt_ai_prompt.dart';
 import 'package:ngern_pai_nai/openai/open_ai_client.dart';
 
 void main() {
@@ -81,9 +83,14 @@ void main() {
     final imagePart = content.cast<Map<String, dynamic>>().singleWhere(
       (part) => part['type'] == 'input_image',
     );
+    final promptPart = content.cast<Map<String, dynamic>>().singleWhere(
+      (part) => part['type'] == 'input_text',
+    );
     final text = capturedBody['text'] as Map<String, dynamic>;
     final format = text['format'] as Map<String, dynamic>;
     expect(capturedBody['store'], isFalse);
+    expect(capturedBody['instructions'], receiptInstructions);
+    expect(promptPart['text'], receiptImagePrompt);
     expect(imagePart['detail'], 'high');
     expect(imagePart['image_url'], 'data:image/jpeg;base64,AQID');
     expect(format['type'], 'json_schema');
@@ -107,7 +114,7 @@ void main() {
     await expectLater(
       client.validateKey(apiKey: 'secret-key', model: 'gpt-6-luna'),
       throwsA(
-        isA<OpenAiRequestError>()
+        isA<AiRequestError>()
             .having((error) => error.requestId, 'requestId', 'req-rate-limit')
             .having(
               (error) => error.thaiMessage,

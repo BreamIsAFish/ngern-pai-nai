@@ -36,7 +36,7 @@ export default function createMockBridge(): BridgeClient {
   let transactions = [...seedTransactions, ...(visualState?.startsWith('home-') ? seedHomeHistory : [])]
   let categories = [...seedCategories]
   let tags = [...seedTags]
-  let openAiConfigured = true
+  let aiConfigured = true
   let privacyNoticeSeen = true
   const status = () => ({
     signedIn,
@@ -62,8 +62,8 @@ export default function createMockBridge(): BridgeClient {
           spreadsheetTrashed = false; sheetReady = true; spreadsheetId = 'replacement-sheet-id'; transactions = []; tags = []; result = status(); break
         }
         case 'sheet.resetTransactions': transactions = []; result = status(); break
-        case 'openai.getStatus': result = { configured: openAiConfigured, verified: openAiConfigured, model: 'gpt-6-luna', privacyNoticeSeen }; break
-        case 'openai.openSettings': openAiConfigured = true; result = { configured: true, verified: true, model: 'gpt-6-luna', privacyNoticeSeen }; break
+        case 'ai.getStatus': result = { provider: 'openai', providerName: 'OpenAI', configured: aiConfigured, verified: aiConfigured, model: 'gpt-6-luna', privacyNoticeSeen }; break
+        case 'ai.openSettings': aiConfigured = true; result = { provider: 'openai', providerName: 'OpenAI', configured: true, verified: true, model: 'gpt-6-luna', privacyNoticeSeen }; break
         case 'receipts.acceptPrivacy': privacyNoticeSeen = true; result = { accepted: true }; break
         case 'receipts.pick': {
           const source = (payload as BridgeOperations['receipts.pick']['payload']).source

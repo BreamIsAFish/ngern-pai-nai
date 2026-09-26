@@ -12,7 +12,9 @@ export interface AppStatus {
   schemaResetRequired?: boolean
 }
 
-export interface OpenAiStatus {
+export interface AiStatus {
+  provider: 'openai' | 'google_ai_studio'
+  providerName: string
   configured: boolean
   verified: boolean
   model: string
@@ -54,8 +56,8 @@ export interface BridgeOperations {
   'sheet.restore': { payload: Record<string, never>; result: AppStatus }
   'sheet.createReplacement': { payload: Record<string, never>; result: AppStatus }
   'sheet.resetTransactions': { payload: Record<string, never>; result: AppStatus }
-  'openai.getStatus': { payload: Record<string, never>; result: OpenAiStatus }
-  'openai.openSettings': { payload: Record<string, never>; result: OpenAiStatus }
+  'ai.getStatus': { payload: Record<string, never>; result: AiStatus }
+  'ai.openSettings': { payload: Record<string, never>; result: AiStatus }
   'receipts.acceptPrivacy': { payload: Record<string, never>; result: { accepted: boolean } }
   'receipts.pick': { payload: { source: 'camera' | 'gallery' }; result: ReceiptImageSelection }
   'receipts.process': { payload: { batchId: string; imageId: string }; result: ReceiptProcessResult }

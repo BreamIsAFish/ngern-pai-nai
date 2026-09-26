@@ -2,19 +2,20 @@
 
 ## Scope
 
-Prototype 2 lets users provide their own OpenAI API key, select Thai receipt images, and import extracted transactions into the app's Google Sheet.
+Prototype 2 lets users select OpenAI or Google AI Studio, provide their own API key, select Thai receipt images, and import extracted transactions into the app's Google Sheet.
 
 The feature supports purchase receipts only. Each image must contain exactly one receipt and produces at most one expense transaction. Multi-page receipts, images containing multiple receipts, refunds, cancellation slips, non-THB receipts, and ambiguous currencies are unsupported.
 
-## OpenAI settings
+## AI provider settings
 
-- Add an OpenAI settings menu under the Account tab.
+- Add an AI provider settings menu under the Account tab.
+- Let users select OpenAI or Google AI Studio. Preserve each provider's API key and model when switching.
 - Store the API key on the device using OS-backed secure storage. The key must never enter the WebView, Google Sheets, URLs, analytics, or logs.
-- Display a saved key entirely as dots. Do not reveal its prefix, suffix, or full value, and do not offer a copy action.
+- Display the active provider and its saved key entirely as dots in a disabled field. Require **Edit** before changing provider, key, or model. Save changes only after validation succeeds, and discard unsaved changes on **Cancel**. Do not reveal the key's prefix, suffix, or full value, and do not offer a copy action.
 - Let users replace or delete the key. Deleting it disables receipt import but preserves the selected model.
 - Keep the key on the device until the user explicitly replaces or deletes it. Disconnecting the Google account must not delete it.
 - Validate a new key with a minimal request before enabling receipt import. If the device is offline, save it as unverified and allow validation later.
-- Use a fixed model selector containing `gpt-6-luna`, `gpt-6-sol`, and `gpt-6-astra`. Default to `gpt-6-luna`.
+- Use a fixed model selector for the selected provider. OpenAI defaults to `gpt-6-luna`; Google AI Studio defaults to `gemini-3.8-flash`.
 - Do not fetch the model list from the API.
 - Validate access before changing the active model. Keep the last working model active if validation fails.
 - Do not silently fall back when a selected model becomes unavailable. Show the error and let the user change the model.
@@ -22,16 +23,16 @@ The feature supports purchase receipts only. Each image must contain exactly one
 ## Home and image selection
 
 - Add a secondary **สแกนใบเสร็จ** action beside the existing manual transaction action on Home.
-- Keep the action visible when OpenAI is not configured. Tapping it must open OpenAI settings with a short Thai explanation.
+- Keep the action visible when the active provider is not configured. Tapping it must open AI provider settings with a short Thai explanation.
 - After tapping the action, offer **ถ่ายรูป** and **เลือกจากคลังรูปภาพ**.
 - Camera capture handles one receipt at a time. Gallery selection accepts up to 10 images per batch.
 - Show a one-time Thai privacy notice before the first import.
 
 ## Processing
 
-- Process each image in a separate OpenAI Responses API request using Structured Outputs and `store: false`.
+- Process each image in a separate provider request. Use OpenAI Responses Structured Outputs with `store: false`, or Gemini `generateContent` with a JSON response schema.
 - Run no more than three receipt requests concurrently.
-- Do not automatically retry failed requests. Users may retry explicitly from the results modal.
+- Retry transient provider responses with bounded backoff. Users may retry other failures explicitly from the results modal.
 - Open the results modal when processing starts. Add each valid transaction as soon as its extraction and duplicate check succeed.
 - Keep the modal open until all images finish processing, or until the user selects **ยกเลิกรายการที่เหลือ**.
 - Cancelling stops active and queued work where possible. Transactions already added remain saved.
@@ -100,7 +101,7 @@ Required actions:
 - Each failed receipt has **ลองใหม่**, and the modal has **ลองใหม่ทั้งหมด** for failed receipts.
 - Retrying reuses the temporary image only while the modal remains open. After it closes, the user must select the image again.
 
-Show clear Thai error messages and an OpenAI request ID when available. Never display or log the API key, image data, full payload, or raw model response. Sanitized diagnostic logging is allowed in development builds.
+Show clear Thai error messages and a provider request ID when available. Never display or log the API key, image data, full payload, or raw model response. Sanitized diagnostic logging is allowed in development builds.
 
 ## Category behavior
 
