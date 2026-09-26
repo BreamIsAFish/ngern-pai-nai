@@ -10,6 +10,7 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../bridge/bridge_controller.dart';
 import 'is_allowed_web_app_uri.dart';
+import 'show_web_app_confirm_dialog.dart';
 
 class WebViewPage extends StatefulWidget {
   const WebViewPage({required this.bridge, required this.webAppUri, super.key});
@@ -34,6 +35,13 @@ class _WebViewPageState extends State<WebViewPage> {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFFF4F0E8))
+      ..setOnJavaScriptConfirmDialog(
+        (request) => showWebAppConfirmDialog(
+          allowed: widget.webAppUri,
+          context: context,
+          request: request,
+        ),
+      )
       ..addJavaScriptChannel(
         'FlutterBridge',
         onMessageReceived: _handleBridgeMessage,

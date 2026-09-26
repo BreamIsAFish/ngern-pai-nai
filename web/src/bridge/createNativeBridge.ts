@@ -14,6 +14,13 @@ export class BridgeRequestError extends Error {
   }
 }
 
+export function bridgeRequestTimeoutMs(operation: BridgeOperation): number {
+  if (operation === 'ai.openSettings' || operation === 'receipts.pick') {
+    return 900_000
+  }
+  return operation === 'receipts.process' ? 90_000 : 20_000
+}
+
 /** Creates a correlated request client for the narrow Flutter JavaScript channel. */
 export default function createNativeBridge(): BridgeClient {
   const pending = new Map<string, PendingRequest>()
@@ -59,7 +66,7 @@ export default function createNativeBridge(): BridgeClient {
       return new Promise((resolve, reject) => {
         pending.set(id, { operation, resolve, reject })
         window.FlutterBridge?.postMessage(message)
-        const timeoutMs = operation === 'ai.openSettings' ? 900_000 : operation === 'receipts.process' ? 90_000 : 20_000
+        const timeoutMs = bridgeRequestTimeoutMs(operation)
         window.setTimeout(() => {
           if (!pending.has(id)) return
           pending.delete(id)
