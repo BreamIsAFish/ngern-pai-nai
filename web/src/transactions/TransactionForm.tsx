@@ -9,9 +9,9 @@ import validateTransaction from './validation'
 import Icon from '../ui/Icon'
 import isValidAmountInput from './isValidAmountInput'
 
-interface Props { busy: boolean; categories: Category[]; initialCategoryPickerOpen?: boolean; initialType?: TransactionType; tags: Tag[]; transaction?: Transaction; onCancel(): void; onSubmit(input: TransactionInput): void; onDelete?(): void; onManageCategories?(): void; onManageTags?(): void }
+interface Props { categories: Category[]; initialCategoryPickerOpen?: boolean; initialType?: TransactionType; tags: Tag[]; transaction?: Transaction; onCancel(): void; onSubmit(input: TransactionInput): void; onDelete?(): void; onManageCategories?(): void; onManageTags?(): void }
 
-export default function TransactionForm({ busy, categories, initialCategoryPickerOpen = false, initialType = 'expense', tags, transaction, onCancel, onSubmit, onDelete, onManageCategories, onManageTags }: Props) {
+export default function TransactionForm({ categories, initialCategoryPickerOpen = false, initialType = 'expense', tags, transaction, onCancel, onSubmit, onDelete, onManageCategories, onManageTags }: Props) {
   const initialCategory = initialType === 'transfer' ? 'Transfer' : ''
   const initial = transaction ? transactionToDraft(transaction) : { localDate: localDateValue(), localTime: localTimeValue(), type: initialType, category: initialCategory, tag: null, amount: 0, note: '', destination: null, transactionNumber: null, source: 'manual' as const, dateInferred: false }
   const [draft, setDraft] = useState<TransactionDraft>(initial)
@@ -26,7 +26,8 @@ export default function TransactionForm({ busy, categories, initialCategoryPicke
   const submit = () => {
     const next = { ...draft, amount: Number(amount), category: draft.type === 'transfer' ? 'Transfer' : draft.category, dateInferred: draft.source === 'receipt_ai' ? false : draft.dateInferred }
     setSubmitted(true)
-    if (!Object.keys(validateTransaction(next)).length) onSubmit(draftToUtcInput(next))
+    if (Object.keys(validateTransaction(next)).length) return
+    onSubmit(draftToUtcInput(next))
   }
   const confirmDelete = () => { if (onDelete && window.confirm('Delete this transaction? This cannot be undone.')) onDelete() }
   return <main className="transaction-screen">
@@ -48,7 +49,7 @@ export default function TransactionForm({ busy, categories, initialCategoryPicke
       {draft.type !== 'transfer' && <button className="future-option" disabled title="Coming later" type="button"><Icon name="repeat" /> <span>Schedule again</span><small>Coming later</small></button>}
       {draft.type === 'transfer' && <p className="transfer-help">Transfers are excluded from income and expense totals. Use them for moving money between accounts.</p>}
     </div>
-    <button className="save-entry" disabled={busy} onClick={submit} type="button">{busy ? 'Saving…' : 'Save'}</button>
+    <button className="save-entry" onClick={submit} type="button">Save</button>
     {categoryPickerOpen && <CategoryPickerDialog
       categories={available}
       onCancel={() => setCategoryPickerOpen(false)}

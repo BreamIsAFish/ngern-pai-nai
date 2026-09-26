@@ -95,11 +95,19 @@ export default function createMockBridge(): BridgeClient {
         }
         case 'transactions.create': {
           const input = (payload as BridgeOperations['transactions.create']['payload']).transaction
+          if (visualState === 'add-expense-create-error') {
+            await new Promise((resolve) => window.setTimeout(resolve, 320))
+            throw new Error('Could not create transaction.')
+          }
           const transaction = { ...input, id: crypto.randomUUID(), createdAt: stamp(), updatedAt: stamp() }
           transactions = [transaction, ...transactions]; result = transaction; break
         }
         case 'transactions.update': {
           const update = payload as BridgeOperations['transactions.update']['payload']
+          if (visualState === 'edit-transaction-update-error') {
+            await new Promise((resolve) => window.setTimeout(resolve, 320))
+            throw new Error('Could not update transaction.')
+          }
           const old = transactions.find((item) => item.id === update.id)
           if (!old) throw new Error('Transaction not found.')
           const transaction = { ...old, ...update.transaction, updatedAt: stamp() }
@@ -107,6 +115,10 @@ export default function createMockBridge(): BridgeClient {
         }
         case 'transactions.delete': {
           const { id } = payload as BridgeOperations['transactions.delete']['payload']
+          if (visualState === 'edit-transaction-delete-error') {
+            await new Promise((resolve) => window.setTimeout(resolve, 320))
+            throw new Error('Could not delete transaction.')
+          }
           transactions = transactions.filter((item) => item.id !== id); result = { id }; break
         }
         case 'categories.list': result = [...categories]; break
