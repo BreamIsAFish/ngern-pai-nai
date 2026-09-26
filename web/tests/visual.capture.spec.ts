@@ -198,7 +198,7 @@ test('keeps May and August fully visible without moving the Home month arrows', 
   expect(await nextMonth.evaluate((element) => element.getBoundingClientRect().x)).toBe(initialNextX)
 })
 
-test('keeps the Home navigation fixed without extra space after the transaction list', async ({ page }) => {
+test('keeps the Home navigation fixed and reserves space for the entry actions', async ({ page }) => {
   await page.goto('/')
   const navigation = page.locator('.bottom-nav')
   const viewportHeight = await page.evaluate(() => window.innerHeight)
@@ -206,12 +206,17 @@ test('keeps the Home navigation fixed without extra space after the transaction 
 
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
   expect(await navigation.evaluate((element) => Math.round(element.getBoundingClientRect().bottom))).toBe(viewportHeight)
-  const contentGap = await page.locator('.date-group').last().evaluate((element) => {
-    const navigationTop = document.querySelector('.bottom-nav')?.getBoundingClientRect().top ?? window.innerHeight
-    return Math.round(navigationTop - element.getBoundingClientRect().bottom)
+  const layout = await page.locator('.date-group').last().evaluate((element) => {
+    const contentBottom = element.getBoundingClientRect().bottom
+    const actions = document.querySelector('.entry-fabs')?.getBoundingClientRect()
+    return {
+      actionHeight: Math.round(actions?.height ?? 0),
+      contentClearance: Math.round((actions?.top ?? window.innerHeight) - contentBottom),
+    }
   })
-  expect(contentGap).toBeGreaterThanOrEqual(0)
-  expect(contentGap).toBeLessThanOrEqual(20)
+  expect(layout.actionHeight).toBe(109)
+  expect(layout.contentClearance).toBeGreaterThanOrEqual(0)
+  expect(layout.contentClearance).toBeLessThanOrEqual(20)
 })
 
 test('requires a category and accepts only numeric amount input for a new entry', async ({ page }) => {
