@@ -3,8 +3,8 @@
 export CSV
 
 # Run ios release mode (with deployed webapp)
-build-release-ios:
-	cd app && fvm flutter run --dart-define=WEB_APP_URL=https://ngern-pai-nai.kruayhom.info
+run-release-ios:
+	cd app && fvm flutter run --release --dart-define=WEB_APP_URL=https://ngern-pai-nai.kruayhom.info
 
 # Copy a CSV into Files > On My iPhone on the booted iOS simulator.
 # EXAMPLE: make import-csv-ios CSV="$HOME/Downloads/meowjot.csv"
