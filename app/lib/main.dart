@@ -10,6 +10,7 @@ import 'auth/google_auth_service.dart';
 import 'bridge/bridge_controller.dart';
 import 'config/app_config.dart';
 import 'google_ai/google_ai_client.dart';
+import 'imports/meowjot_import_service.dart';
 import 'openai/open_ai_client.dart';
 import 'receipts/receipt_image_store.dart';
 import 'receipts/receipt_import_service.dart';
@@ -41,6 +42,9 @@ Future<void> main() async {
     settings: aiSettings,
     sheets: sheets,
   );
+  final meowJotImports = MeowJotImportService(
+    importTransactions: sheets.importTransactions,
+  );
   final navigatorKey = GlobalKey<NavigatorState>();
   final securityLogMessage = config.securityLogMessage;
   if (securityLogMessage != null) {
@@ -66,6 +70,7 @@ Future<void> main() async {
         openSettings: openSettings,
         receiptImports: receiptImports,
         receiptProgress: receiptProgress,
+        meowJotImports: meowJotImports,
       ),
       config: config,
       navigatorKey: navigatorKey,

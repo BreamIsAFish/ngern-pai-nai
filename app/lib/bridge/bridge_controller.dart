@@ -6,6 +6,8 @@ import '../ai/ai_provider.dart';
 import '../ai/ai_settings.dart';
 import '../auth/google_auth_service.dart';
 import '../categories/category.dart';
+import '../imports/meowjot_csv_parser.dart';
+import '../imports/meowjot_import_service.dart';
 import '../receipts/receipt_image_store.dart';
 import '../receipts/receipt_import_service.dart';
 import '../receipts/receipt_batch_progress_store.dart';
@@ -22,12 +24,14 @@ class BridgeController {
     Future<void> Function()? openSettings,
     ReceiptImportService? receiptImports,
     ReceiptBatchProgressStore? receiptProgress,
+    MeowJotImportService? meowJotImports,
   }) : _auth = auth,
        _sheets = sheets,
        _aiSettings = aiSettings,
        _openSettings = openSettings,
        _receiptImports = receiptImports,
-       _receiptProgress = receiptProgress;
+       _receiptProgress = receiptProgress,
+       _meowJotImports = meowJotImports;
 
   final GoogleAuthService _auth;
   final SheetsGateway _sheets;
@@ -35,6 +39,7 @@ class BridgeController {
   final Future<void> Function()? _openSettings;
   final ReceiptImportService? _receiptImports;
   final ReceiptBatchProgressStore? _receiptProgress;
+  final MeowJotImportService? _meowJotImports;
 
   Future<BridgeResponse> handleMessage(String message) async {
     var requestId = 'unknown';
@@ -112,6 +117,8 @@ class BridgeController {
         'รายการนี้ซ้ำกับรายการที่มีอยู่',
         data: error.record.toJson(),
       );
+    } on MeowJotImportInvalid catch (error) {
+      return _failure(requestId, 'IMPORT_INVALID', error.message);
     } on FormatException {
       return _failure(
         requestId,
@@ -148,6 +155,7 @@ class BridgeController {
       'receipts.cancel' => _cancelReceiptBatch(request.payload),
       'receipts.discard' => _discardReceiptBatch(request.payload),
       'receipts.takeInterrupted' => _takeInterruptedReceipts(),
+      'imports.meowjot' => _importMeowJot(),
       'transactions.list' => _listTransactions(request.payload),
       'transactions.create' => _createTransaction(request.payload),
       'transactions.update' => _updateTransaction(request.payload),
@@ -277,6 +285,12 @@ class BridgeController {
   Future<Map<String, dynamic>> _takeInterruptedReceipts() async {
     final progress = _receiptProgress;
     return {'completed': await progress?.takeInterruptedCount() ?? 0};
+  }
+
+  Future<Map<String, dynamic>> _importMeowJot() async {
+    final imports = _meowJotImports;
+    if (imports == null) throw const FormatException('Importer unavailable.');
+    return (await imports.pickAndImport()).toJson();
   }
 
   Future<Map<String, dynamic>> _showAiSettings() async {
