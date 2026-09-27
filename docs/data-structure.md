@@ -19,6 +19,7 @@ The app stores schema version 3 in a private spreadsheet named `NgernPaiNai_data
 - `source` is `manual` or `receipt_ai`. `date_inferred` records that a receipt had no readable date and the import time was used.
 - Receipt duplicates are detected by normalized transaction number, extracted receipt date, and amount. Detection is skipped when the transaction number or extracted date is missing.
 - IDs are UUIDs. `created_at` and `updated_at` are ISO 8601 timestamps.
+- MeowJot CSV imports use deterministic UUIDs so the same exported rows can be imported safely more than once.
 - Category names are case-insensitively unique within each type. Tag names are unique across all types. Both are limited to 20 characters.
 - Custom categories are capped at 50 per type. Tags are capped at 100.
 - A transaction can have one category and at most one tag. Notes are limited to 160 characters.
