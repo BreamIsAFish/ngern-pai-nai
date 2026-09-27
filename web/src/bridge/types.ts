@@ -27,6 +27,15 @@ export interface ReceiptImageSelection {
   images: { id: string; name: string }[]
 }
 
+export interface MeowJotImportResult {
+  cancelled: boolean
+  fileName?: string
+  sourceRows: number
+  imported: number
+  duplicates: number
+  skippedZeroAmount: number
+}
+
 export type ReceiptProcessResult =
   | { status: 'added' | 'duplicate'; transaction: Transaction; warnings: string[] }
   | { status: 'failed'; message: string; requestId?: string; warnings: string[] }
@@ -64,6 +73,7 @@ export interface BridgeOperations {
   'receipts.cancel': { payload: { batchId: string }; result: { cancelled: boolean } }
   'receipts.discard': { payload: { batchId: string }; result: { discarded: boolean } }
   'receipts.takeInterrupted': { payload: Record<string, never>; result: { completed: number } }
+  'imports.meowjot': { payload: Record<string, never>; result: MeowJotImportResult }
   'transactions.list': { payload: { utcMonths: string[] }; result: { transactions: Transaction[]; skippedRows: number } }
   'transactions.create': { payload: { transaction: TransactionInput }; result: Transaction }
   'transactions.update': {

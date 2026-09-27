@@ -2,8 +2,8 @@ import type { AiStatus, AppStatus } from '../bridge/types'
 import CatIllustration from '../ui/CatIllustration'
 import Icon from '../ui/Icon'
 
-interface Props { aiStatus?: AiStatus; busy: boolean; status: AppStatus; onDisconnect(): void; onHome(): void; onManageSheet(): void; onManageCategories(): void; onManageTags(): void; onManageAi(): void }
-export default function SettingsPage({ aiStatus, busy, status, onDisconnect, onHome, onManageSheet, onManageCategories, onManageTags, onManageAi }: Props) {
+interface Props { aiStatus?: AiStatus; busy: boolean; status: AppStatus; onDisconnect(): void; onHome(): void; onImportMeowJot(): void; onManageSheet(): void; onManageCategories(): void; onManageTags(): void; onManageAi(): void }
+export default function SettingsPage({ aiStatus, busy, status, onDisconnect, onHome, onImportMeowJot, onManageSheet, onManageCategories, onManageTags, onManageAi }: Props) {
   return <main className="profile-page">
     <header className="profile-hero"><div className="profile-art"><div className="meow-gold"><span>฿</span><small>MeowGold</small></div><CatIllustration className="profile-cat" /></div></header>
     <section className="profile-plan"><div><span>MeowGold</span><strong>Plan with confidence</strong></div><button disabled title="Coming later" type="button">Learn more</button></section>
@@ -11,6 +11,7 @@ export default function SettingsPage({ aiStatus, busy, status, onDisconnect, onH
     <h2>Settings</h2>
     <nav className="profile-menu">
       <button onClick={onManageSheet} type="button"><span><Icon name="sheet" /></span><div><strong>Google Sheet</strong><small>Open your sheet and view its link</small></div><b><Icon name="chevron-right" /></b></button>
+      <button onClick={onImportMeowJot} type="button"><span><Icon name="upload" /></span><div><strong>Import from MeowJot</strong><small>Convert a CSV and add it to your Sheet</small></div><b><Icon name="chevron-right" /></b></button>
       <button onClick={onManageCategories} type="button"><span><Icon name="grid" /></span><div><strong>Manage categories</strong><small>Default and custom categories</small></div><b><Icon name="chevron-right" /></b></button>
       <button onClick={onManageTags} type="button"><span><Icon name="tag" /></span><div><strong>Manage tags</strong><small>Shared across all entry types</small></div><b><Icon name="chevron-right" /></b></button>
       <button onClick={onManageAi} type="button"><span><Icon name="key" /></span><div><strong>AI provider</strong><small>{aiStatus?.verified ? `${aiStatus.providerName} · ${aiStatus.model}` : aiStatus?.configured ? `${aiStatus.providerName} · ยังไม่ได้ตรวจสอบ` : 'ตั้งค่า API key เพื่อสแกนใบเสร็จ'}</small></div><b><Icon name="chevron-right" /></b></button>

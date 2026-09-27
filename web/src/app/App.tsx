@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import bridge from '../bridge/client'
 import { BridgeRequestError } from '../bridge/createNativeBridge'
 import createLatestRequestScheduler from '../bridge/createLatestRequestScheduler'
-import type { AiStatus, AppStatus, ReceiptImageSelection } from '../bridge/types'
+import type { AiStatus, AppStatus, MeowJotImportResult, ReceiptImageSelection } from '../bridge/types'
 import CategoryManager from '../categories/CategoryManager'
 import mapCategory, { type Category } from '../categories/model'
 import DashboardPage from '../dashboard/DashboardPage'
+import MeowJotImportPage from '../imports/MeowJotImportPage'
 import ReceiptImportModal from '../receipts/ReceiptImportModal'
 import ReceiptSourceDialog from '../receipts/ReceiptSourceDialog'
 import SearchPage from '../search/SearchPage'
@@ -24,7 +25,7 @@ import { localDateValue, transactionLocalMonth, utcMonthForTransaction, utcMonth
 import LoadingScreen from '../ui/LoadingScreen'
 import { currentVisualState } from '../visual-qa/screens'
 
-type Screen = 'home' | 'profile' | 'sheet' | 'summary' | 'search' | 'categories' | 'tags'
+type Screen = 'home' | 'profile' | 'sheet' | 'meowjot-import' | 'summary' | 'search' | 'categories' | 'tags'
 
 export default function App() {
   const visualState = currentVisualState()
@@ -32,7 +33,8 @@ export default function App() {
     : visualState?.startsWith('summary') ? 'summary'
       : visualState === 'search' ? 'search'
         : visualState === 'tags' || visualState === 'add-tag' ? 'tags'
-          : visualState === 'profile' ? 'profile' : 'home'
+          : visualState === 'profile' ? 'profile'
+            : visualState === 'meowjot-import' ? 'meowjot-import' : 'home'
   const [status, setStatus] = useState<AppStatus>()
   const [aiStatus, setAiStatus] = useState<AiStatus>()
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -48,6 +50,7 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>()
   const [notice, setNotice] = useState<string>()
+  const [meowJotImportResult, setMeowJotImportResult] = useState<MeowJotImportResult>()
   const [tagManagerAdding, setTagManagerAdding] = useState(false)
   const pendingTransactionIds = useRef(new Set<string>())
   const [receiptSourceOpen, setReceiptSourceOpen] = useState(visualState === 'receipt-source')
@@ -254,6 +257,17 @@ export default function App() {
     finally { setBusy(false) }
   }
 
+  const importMeowJot = async () => {
+    setBusy(true); setError(undefined)
+    try {
+      const result = await bridge.request('imports.meowjot', {})
+      setMeowJotImportResult(result)
+      if (!result.cancelled) await loadMonth(month)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not import the MeowJot CSV.')
+    } finally { setBusy(false) }
+  }
+
   if (loading) return <LoadingScreen />
   if (status?.signedIn && status.spreadsheetTrashed) return <SpreadsheetRecoveryPage busy={busy} error={error} onCreateNew={() => void recoverSpreadsheet('sheet.createReplacement')} onRestore={() => void recoverSpreadsheet('sheet.restore')} spreadsheetUrl={status.spreadsheetUrl} />
   if (status?.signedIn && status.schemaResetRequired) return <SchemaResetPage busy={busy} error={error} onConfirm={() => void resetTransactions()} />
@@ -267,8 +281,9 @@ export default function App() {
       {error && <div className="toast" role="alert">{error}<button className="toast-dismiss" onClick={() => setError(undefined)} type="button">Dismiss</button></div>}
       {notice && <button className="toast notice" onClick={() => setNotice(undefined)} type="button">{notice}<span>Dismiss</span></button>}
       {screen === 'home' && <DashboardPage categories={categories} latestMonth={localDateValue().slice(0, 7)} loading={monthLoading} month={month} monthPickerOpenInitially={visualState === 'home-month-picker'} onAdd={() => setEditing(null)} onChangeMonth={changeMonth} onEdit={editTransaction} onOpenProfile={() => setScreen('profile')} onOpenSearch={() => setScreen('search')} onOpenSummary={() => setScreen('summary')} onRefresh={() => void refresh()} onScanReceipt={() => setReceiptSourceOpen(true)} refreshing={refreshing} showCoach={!visualState || visualState === 'home-dashboard' || visualState === 'home-month-picker'} transactions={visibleTransactions} />}
-      {screen === 'profile' && <SettingsPage aiStatus={aiStatus} busy={busy} onDisconnect={() => void disconnect()} onHome={() => setScreen('home')} onManageAi={() => void manageAi()} onManageSheet={() => setScreen('sheet')} onManageCategories={() => setScreen('categories')} onManageTags={() => { setTagManagerAdding(false); setScreen('tags') }} status={status} />}
+      {screen === 'profile' && <SettingsPage aiStatus={aiStatus} busy={busy} onDisconnect={() => void disconnect()} onHome={() => setScreen('home')} onImportMeowJot={() => { setMeowJotImportResult(undefined); setScreen('meowjot-import') }} onManageAi={() => void manageAi()} onManageSheet={() => setScreen('sheet')} onManageCategories={() => setScreen('categories')} onManageTags={() => { setTagManagerAdding(false); setScreen('tags') }} status={status} />}
       {screen === 'sheet' && <GoogleSheetPage onBack={() => setScreen('profile')} onRefresh={() => void refreshSheetAccount()} refreshing={refreshing} status={status} />}
+      {screen === 'meowjot-import' && <MeowJotImportPage busy={busy} onBack={() => setScreen('profile')} onImport={() => void importMeowJot()} result={meowJotImportResult} />}
       {screen === 'summary' && <SummaryPage categories={categories} initialView={visualState === 'summary-categories' ? 'list' : 'chart'} latestMonth={localDateValue().slice(0, 7)} loading={monthLoading} month={month} monthPickerOpenInitially={visualState === 'summary-month-picker'} onBack={() => setScreen('home')} onChangeMonth={changeMonth} transactions={transactions} />}
       {screen === 'search' && <SearchPage categories={categories} fetchTransactions={fetchTransactions} onBack={() => setScreen('home')} onEdit={editTransaction} visualKeyboard={visualState === 'search'} />}
       {screen === 'categories' && <CategoryManager {...common} categories={categories} initialType={visualState === 'categories-income' ? 'income' : 'expense'} onBack={() => setScreen('profile')} onChange={setCategories} />}

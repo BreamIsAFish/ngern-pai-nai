@@ -88,6 +88,7 @@ export default function createMockBridge(): BridgeClient {
         case 'receipts.cancel': result = { cancelled: true }; break
         case 'receipts.discard': result = { discarded: true }; break
         case 'receipts.takeInterrupted': result = { completed: 0 }; break
+        case 'imports.meowjot': result = { cancelled: false, fileName: 'meowjot-export.csv', sourceRows: 476, imported: 462, duplicates: 9, skippedZeroAmount: 5 }; break
         case 'transactions.list': {
           const months = (payload as BridgeOperations['transactions.list']['payload']).utcMonths
           result = { transactions: transactions.filter((item) => months.includes(item.date.slice(0, 7).replace('-', '_'))), skippedRows: 0 }
