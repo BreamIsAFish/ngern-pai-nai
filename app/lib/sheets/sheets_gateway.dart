@@ -198,6 +198,87 @@ class SheetsGateway {
     }
   }
 
+  /// Appends imported records to their UTC month tabs and skips existing IDs.
+  Future<TransactionImportResult> importTransactions(
+    List<TransactionRecord> records,
+  ) async {
+    if (records.isEmpty) {
+      return const TransactionImportResult(imported: 0, duplicates: 0);
+    }
+    final inputIds = records.map((record) => record.id).toList();
+    if (inputIds.toSet().length != inputIds.length) {
+      throw const FormatException('Imported transaction IDs must be unique.');
+    }
+    final spreadsheetId = await _requireSpreadsheetId();
+    final client = await _auth.authenticatedClient();
+    try {
+      final api = sheets.SheetsApi(client);
+      final spreadsheet = await api.spreadsheets.get(spreadsheetId);
+      final titles =
+          spreadsheet.sheets
+              ?.map((sheet) => sheet.properties?.title)
+              .whereType<String>()
+              .toSet() ??
+          <String>{};
+      final transactionTitles = titles
+          .where((title) => title.startsWith('Transactions_'))
+          .toList(growable: false);
+      final existingIds = <String>{};
+      if (transactionTitles.isNotEmpty) {
+        final response = await api.spreadsheets.values.batchGet(
+          spreadsheetId,
+          ranges: transactionTitles.map((title) => '$title!A2:A').toList(),
+        );
+        for (final valueRange in response.valueRanges ?? const []) {
+          for (final row in valueRange.values ?? const <List<Object?>>[]) {
+            if (row.isNotEmpty && row.first.toString().isNotEmpty) {
+              existingIds.add(row.first.toString());
+            }
+          }
+        }
+      }
+
+      final pending = records
+          .where((record) => !existingIds.contains(record.id))
+          .toList(growable: false);
+      final grouped = <String, List<TransactionRecord>>{};
+      for (final record in pending) {
+        grouped
+            .putIfAbsent(transactionSheet(record.input.utcMonth), () => [])
+            .add(record);
+      }
+
+      final existingTargets = grouped.keys.where(titles.contains).toList();
+      for (final title in existingTargets) {
+        await _validateHeader(api, spreadsheetId, title, transactionHeaders);
+      }
+      final missingTargets = grouped.keys.where(
+        (title) => !titles.contains(title),
+      );
+      for (final title in missingTargets) {
+        await _addSheet(api, spreadsheetId, title);
+        await _writeHeader(api, spreadsheetId, title, transactionHeaders);
+      }
+      for (final entry in grouped.entries) {
+        await api.spreadsheets.values.append(
+          sheets.ValueRange(
+            values: entry.value.map((record) => record.toSheetRow()).toList(),
+          ),
+          spreadsheetId,
+          '${entry.key}!A:N',
+          valueInputOption: 'RAW',
+          insertDataOption: 'INSERT_ROWS',
+        );
+      }
+      return TransactionImportResult(
+        imported: pending.length,
+        duplicates: records.length - pending.length,
+      );
+    } finally {
+      client.close();
+    }
+  }
+
   Future<TransactionRecord> createTransaction(TransactionInput input) async {
     final spreadsheetId = await _requireSpreadsheetId();
     final now = DateTime.now().toUtc();
@@ -1117,4 +1198,14 @@ class TransactionListResult {
   });
   final List<TransactionRecord> records;
   final int skippedRows;
+}
+
+class TransactionImportResult {
+  const TransactionImportResult({
+    required this.imported,
+    required this.duplicates,
+  });
+
+  final int duplicates;
+  final int imported;
 }
