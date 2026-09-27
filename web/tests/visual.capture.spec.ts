@@ -95,6 +95,19 @@ test('pulling down on the Google Sheet page refreshes the account status', async
   await expect(page.getByText('Connected', { exact: true })).toBeVisible()
 })
 
+test('imports a raw MeowJot CSV from the Profile menu in one flow', async ({ page }) => {
+  await page.goto('/?visual=profile')
+  await page.getByRole('button', { name: /Import from MeowJot/ }).click()
+  await expect(page.getByRole('heading', { name: 'Import from MeowJot' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Choose CSV and import' }).click()
+
+  await expect(page.getByText('meowjot-export.csv')).toBeVisible()
+  await expect(page.getByText('462', { exact: true })).toBeVisible()
+  await expect(page.getByText('9', { exact: true })).toBeVisible()
+  await expect(page.getByText('5', { exact: true })).toBeVisible()
+})
+
 test('month navigation shows loading, settles on the latest rapid selection, and blocks future months', async ({ page }) => {
   await page.goto('/')
   const nextMonth = page.getByRole('button', { name: 'Next month' }).first()
