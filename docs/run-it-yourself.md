@@ -21,6 +21,18 @@ fvm use
 cd ..
 ```
 
+## Set up the iPhone install skill
+
+Run this from the repository root with Python 3 installed:
+
+```bash
+make setup-agent-install-skill
+```
+
+This creates the ignored `.agents/skills/install-ngern-pai-nai/preferences.json` from the example and fills in the repository path. Running it again preserves your saved settings. The skill selects and remembers your iPhone when you use it.
+
+In an agent chat for this repository, use `$install-ngern-pai-nai` to build, install, and launch the release app over USB or the local network.
+
 ## Run the web app
 
 The browser build uses an in-memory mock. It does not need Flutter or Google credentials.

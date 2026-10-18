@@ -1,4 +1,4 @@
-.PHONY: build-release-ios import-csv-ios
+.PHONY: build-release-ios import-csv-ios setup-agent-install-skill
 
 export CSV
 
@@ -16,3 +16,14 @@ import-csv-ios:
 	test -n "$$files_group" || { printf 'Could not find Files storage for the booted simulator.\n' >&2; exit 1; }; \
 	rsync -- "$$CSV" "$$files_group/File Provider Storage/"; \
 	printf 'Copied %s to Files > On My iPhone.\n' "$$CSV"
+
+# Initialize local settings for the iPhone installation skill.
+setup-agent-install-skill:
+	@set -eu; \
+	preferences=".agents/skills/install-ngern-pai-nai/preferences.json"; \
+	if test -e "$$preferences"; then \
+		printf 'Keeping existing %s\n' "$$preferences"; \
+	else \
+		python3 -c 'import json, sys; from pathlib import Path; preferences = Path(sys.argv[1]); settings = json.loads(preferences.with_name("preferences.example.json").read_text()); settings["repo_path"] = str(Path.cwd().resolve()); preferences.open("x").write(json.dumps(settings, indent=2) + "\n")' "$$preferences"; \
+		printf 'Created %s\n' "$$preferences"; \
+	fi

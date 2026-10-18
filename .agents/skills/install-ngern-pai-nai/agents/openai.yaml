@@ -1,0 +1,4 @@
+interface:
+  display_name: "Install Ngern Pai Nai"
+  short_description: "Build, install, and launch Ngern Pai Nai on iPhone"
+  default_prompt: "Use $install-ngern-pai-nai to build and install Ngern Pai Nai on my iPhone."
