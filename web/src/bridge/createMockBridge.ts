@@ -2,6 +2,7 @@ import type { Category } from '../categories/model'
 import { defaultCategoryDefinitions } from '../categories/defaultCategories'
 import type { Tag } from '../tags/model'
 import type { Transaction } from '../transactions/model'
+import createRandomId from './createRandomId'
 import type { BridgeClient, BridgeOperation, BridgeOperations } from './types'
 
 const iso = new URLSearchParams(window.location.search).has('visual') ? '2026-09-20T12:00:00.000Z' : new Date().toISOString()
@@ -100,7 +101,7 @@ export default function createMockBridge(): BridgeClient {
             await new Promise((resolve) => window.setTimeout(resolve, 320))
             throw new Error('Could not create transaction.')
           }
-          const transaction = { ...input, id: crypto.randomUUID(), createdAt: stamp(), updatedAt: stamp() }
+          const transaction = { ...input, id: createRandomId(), createdAt: stamp(), updatedAt: stamp() }
           transactions = [transaction, ...transactions]; result = transaction; break
         }
         case 'transactions.update': {
@@ -125,7 +126,7 @@ export default function createMockBridge(): BridgeClient {
         case 'categories.list': result = [...categories]; break
         case 'categories.create': {
           const input = (payload as BridgeOperations['categories.create']['payload']).category
-          const category = { ...input, id: crypto.randomUUID(), isDefault: false, createdAt: stamp(), updatedAt: stamp() }
+          const category = { ...input, id: createRandomId(), isDefault: false, createdAt: stamp(), updatedAt: stamp() }
           categories = [...categories, category]; result = category; break
         }
         case 'categories.update': {
@@ -142,7 +143,7 @@ export default function createMockBridge(): BridgeClient {
         case 'tags.list': result = [...tags]; break
         case 'tags.create': {
           const input = (payload as BridgeOperations['tags.create']['payload']).tag
-          const tag = { ...input, id: crypto.randomUUID(), createdAt: stamp(), updatedAt: stamp() }
+          const tag = { ...input, id: createRandomId(), createdAt: stamp(), updatedAt: stamp() }
           tags = [...tags, tag]; result = tag; break
         }
         case 'tags.update': {
