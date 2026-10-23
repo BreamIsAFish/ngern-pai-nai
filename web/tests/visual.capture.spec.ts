@@ -5,6 +5,11 @@ import { visualQaScreens } from '../src/visual-qa/screens'
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
+// The mock bridge pins visual data to 2026-09-20, so pin the browser clock to the same day.
+test.beforeEach(async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-09-20T12:00:00.000Z'))
+})
+
 for (const screen of visualQaScreens) {
   test(`@capture captures ${screen.label} with deterministic mock data`, async ({ page }) => {
     await page.goto(screen.route)
