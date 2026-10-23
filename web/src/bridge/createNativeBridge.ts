@@ -1,3 +1,4 @@
+import createRandomId from './createRandomId'
 import serializeBridgeRequest from './serializeBridgeRequest'
 import type { BridgeClient, BridgeOperation, BridgeOperations, BridgeResponse } from './types'
 
@@ -56,7 +57,7 @@ export default function createNativeBridge(): BridgeClient {
       operation: Operation,
       payload: BridgeOperations[Operation]['payload'],
     ): Promise<BridgeOperations[Operation]['result']> {
-      const id = crypto.randomUUID()
+      const id = createRandomId()
       const message = serializeBridgeRequest({
         id,
         operation,
