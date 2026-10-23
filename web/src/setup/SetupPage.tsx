@@ -1,3 +1,4 @@
+import Hamster from '../ui/Hamster'
 import Icon from '../ui/Icon'
 
 interface SetupPageProps {
@@ -26,10 +27,7 @@ export default function SetupPage({ busy, error, onConnect }: SetupPageProps) {
         </div>
 
         <div className="setup-illustration" aria-hidden="true">
-          <div className="welcome-cat">
-            <span className="welcome-cat-face">•ᴗ•</span>
-            <span className="welcome-cat-paw">฿</span>
-          </div>
+          <Hamster pose="seed" size={180} />
           <div className="receipt-card">
             <span />
             <span />

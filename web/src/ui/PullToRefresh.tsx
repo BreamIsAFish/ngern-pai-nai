@@ -1,3 +1,4 @@
+import Hamster from './Hamster'
 import { useRef, useState } from 'react'
 import type { ReactNode, TouchEvent } from 'react'
 import getPullStage from './getPullStage'
@@ -56,7 +57,7 @@ export default function PullToRefresh({ children, refreshing, onRefresh }: PullT
       onTouchStart={startPull}
     >
       <div aria-live="polite" className="pull-refresh-indicator">
-        <span aria-hidden="true" className="pull-refresh-cat">฿</span>
+        <Hamster className="pull-refresh-hamster" pose="seed" size={36} />
         <span>{message}</span>
       </div>
       {children}

@@ -5,6 +5,11 @@ import { visualQaScreens } from '../src/visual-qa/screens'
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
+// The mock bridge pins visual data to 2026-09-20, so pin the browser clock to the same day.
+test.beforeEach(async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-09-20T12:00:00.000Z'))
+})
+
 for (const screen of visualQaScreens) {
   test(`@capture captures ${screen.label} with deterministic mock data`, async ({ page }) => {
     await page.goto(screen.route)
@@ -19,7 +24,7 @@ for (const screen of visualQaScreens) {
     }
     await page.addStyleTag({ content: '.vc-switch, #__vconsole { display: none !important; } * { caret-color: transparent !important; }' })
     if (screen.id === 'home-transactions') {
-      await page.evaluate(() => window.scrollTo(0, (document.querySelector('.yellow-header')?.scrollHeight ?? 320) + 20))
+      await page.evaluate(() => window.scrollTo(0, (document.querySelector('.dashboard-header')?.scrollHeight ?? 320) + 20))
       await expect(page.locator('.compact-dashboard-header')).toBeVisible()
     } else if (screen.id === 'summary-categories') {
       await page.locator('.breakdown-tabs').evaluate((element) => {
@@ -73,7 +78,7 @@ test('creates a replacement spreadsheet and opens an empty dashboard', async ({ 
 
 test('opens the production root at the dashboard top', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByText('Meow logged 10 entries today')).toBeVisible()
+  await expect(page.getByText('10 entries tucked away today')).toBeVisible()
   await expect(page.locator('.home-theme-layer')).toBeVisible()
   await expect(page.locator('.home-content-layer')).toBeVisible()
   await expect(page.getByRole('button', { name: /Food Lunch with May/ })).not.toContainText('−')
@@ -115,7 +120,7 @@ test('month navigation shows loading, settles on the latest rapid selection, and
   const initialNextX = await nextMonth.evaluate((element) => element.getBoundingClientRect().x)
 
   await expect(nextMonth).toBeDisabled()
-  await expect(page.locator('.coach-cat')).toHaveCSS('pointer-events', 'none')
+  await expect(page.locator('.total-hamster')).toHaveCSS('pointer-events', 'none')
   await previousMonth.click()
   await previousMonth.click()
   await previousMonth.click()
@@ -166,7 +171,7 @@ test('aligns the Home header card with the transaction card', async ({ page }) =
     const bounds = element.getBoundingClientRect()
     return { left: bounds.left, right: bounds.right }
   })
-  const dataBounds = await page.locator('.ledger-row').first().evaluate((element) => {
+  const dataBounds = await page.locator('.ledger').evaluate((element) => {
     const bounds = element.getBoundingClientRect()
     return { left: bounds.left, right: bounds.right }
   })
@@ -211,25 +216,23 @@ test('keeps May and August fully visible without moving the Home month arrows', 
   expect(await nextMonth.evaluate((element) => element.getBoundingClientRect().x)).toBe(initialNextX)
 })
 
-test('keeps the Home navigation fixed and reserves space for the entry actions', async ({ page }) => {
+test('keeps the floating Home navigation fixed and the last entry clear of its actions', async ({ page }) => {
   await page.goto('/')
-  const navigation = page.locator('.bottom-nav')
-  const viewportHeight = await page.evaluate(() => window.innerHeight)
-  expect(await navigation.evaluate((element) => Math.round(element.getBoundingClientRect().bottom))).toBe(viewportHeight)
+  const navigation = page.getByRole('navigation', { name: 'Main' })
+  const initialBottom = await navigation.evaluate((element) => Math.round(element.getBoundingClientRect().bottom))
+  expect(initialBottom).toBe(await page.evaluate(() => window.innerHeight - 24))
+  await expect(navigation.getByRole('button')).toHaveCount(5)
+  await expect(navigation.getByRole('button', { name: 'Add entry' })).toBeVisible()
+  await expect(navigation.getByRole('button', { name: 'Scan receipt' })).toBeVisible()
+  await expect(page.locator('.entry-fabs')).toHaveCount(0)
 
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
-  expect(await navigation.evaluate((element) => Math.round(element.getBoundingClientRect().bottom))).toBe(viewportHeight)
-  const layout = await page.locator('.date-group').last().evaluate((element) => {
-    const contentBottom = element.getBoundingClientRect().bottom
-    const actions = document.querySelector('.entry-fabs')?.getBoundingClientRect()
-    return {
-      actionHeight: Math.round(actions?.height ?? 0),
-      contentClearance: Math.round((actions?.top ?? window.innerHeight) - contentBottom),
-    }
+  expect(await navigation.evaluate((element) => Math.round(element.getBoundingClientRect().bottom))).toBe(initialBottom)
+  const contentClearance = await page.locator('.date-group').last().evaluate((element) => {
+    const navigation = document.querySelector('.bottom-nav')!.getBoundingClientRect()
+    return navigation.top - element.getBoundingClientRect().bottom
   })
-  expect(layout.actionHeight).toBe(109)
-  expect(layout.contentClearance).toBeGreaterThanOrEqual(0)
-  expect(layout.contentClearance).toBeLessThanOrEqual(20)
+  expect(contentClearance).toBeGreaterThanOrEqual(0)
 })
 
 test('requires a category and accepts only numeric amount input for a new entry', async ({ page }) => {
@@ -347,49 +350,26 @@ test('removes a transaction from Home immediately and restores it when deletion 
   await expect(page.getByRole('button', { name: /Food Lunch with May/ })).toBeVisible()
 })
 
-test('matches the compact MeowJot header geometry on category and entry screens', async ({ page }) => {
-  for (const route of ['/?visual=categories-expense', '/?visual=categories-income']) {
+test('uses outlined pill segments with readable labels on category and entry screens', async ({ page }) => {
+  for (const route of ['/?visual=categories-expense', '/?visual=categories-income', '/?visual=add-expense', '/?visual=add-income', '/?visual=add-transfer']) {
     await page.goto(route)
     await expect(page.locator('[data-visual-ready="true"]')).toBeVisible()
-
-    const header = await page.locator('.manager-page > header').evaluate((element) => {
-      const bounds = element.getBoundingClientRect()
-      return { height: bounds.height, width: bounds.width }
-    })
-    const tabs = await page.locator('.categories-manager-page .manager-tabs').evaluate((element) => {
-      const bounds = element.getBoundingClientRect()
-      return { left: bounds.left, width: bounds.width }
-    })
-
-    expect(header).toEqual({ height: 56, width: 414 })
-    expect(tabs).toEqual({ left: 132, width: 150 })
-    await expect(page.locator('.categories-manager-page .manager-tabs button')).toHaveCount(2)
-    for (const button of await page.locator('.categories-manager-page .manager-tabs button').all()) {
-      expect(await button.evaluate((element) => element.getBoundingClientRect().width)).toBe(75)
-      await expect(button).toHaveCSS('font-weight', '500')
+    const entry = route.includes('add-')
+    const tabs = page.locator(entry ? '.entry-tabs' : '.manager-tabs')
+    await expect(tabs.getByRole('button')).toHaveCount(entry ? 3 : 2)
+    await expect(tabs).toHaveCSS('border-radius', '999px')
+    await expect(tabs).toHaveCSS('border-top-style', 'solid')
+    for (const button of await tabs.getByRole('button').all()) {
+      await expect(button).toHaveCSS('font-weight', '800')
       expect(await button.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
     }
-  }
-
-  for (const route of ['/?visual=add-expense', '/?visual=add-income', '/?visual=add-transfer']) {
-    await page.goto(route)
-    await expect(page.locator('[data-visual-ready="true"]')).toBeVisible()
-
-    const header = await page.locator('.entry-header').evaluate((element) => element.getBoundingClientRect().height)
-    const tabs = await page.locator('.entry-tabs').evaluate((element) => {
-      const bounds = element.getBoundingClientRect()
-      return { left: bounds.left, width: bounds.width }
-    })
-
-    expect(header).toBe(56)
-    expect(tabs.left).toBeCloseTo(98.5, 1)
-    expect(tabs.width).toBe(225)
-    for (const button of await page.locator('.entry-tabs button').all()) {
-      expect(await button.evaluate((element) => element.getBoundingClientRect().width)).toBe(75)
-      await expect(button).toHaveCSS('font-weight', '500')
-      expect(await button.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+    const header = page.locator(entry ? '.entry-header' : '.manager-page > header')
+    await expect(header.getByRole('button', { name: entry ? 'Close' : 'Back' })).toBeVisible()
+    if (entry) {
+      const save = page.getByRole('button', { name: 'Save', exact: true })
+      await expect(save).toHaveCSS('font-weight', '800')
+      expect(await save.evaluate((element) => element.getBoundingClientRect().height)).toBe(58)
     }
-    await expect(page.getByRole('button', { name: 'Save' })).toHaveCSS('font-weight', '500')
   }
 })
 
@@ -461,4 +441,34 @@ test('shows category icons and uses each pie-slice color beside its category nam
   const pieChart = await page.locator('.donut').evaluate((element) => getComputedStyle(element).backgroundImage)
   expect(new Set(markerColors).size).toBe(markerColors.length)
   for (const markerColor of markerColors) expect(pieChart).toContain(markerColor)
+})
+
+test('filters the Home ledger without changing monthly headline totals', async ({ page }) => {
+  await page.goto('/?visual=home-dashboard')
+  const filters = page.getByLabel('Filter transactions')
+  const totals = await page.locator('.month-total').innerText()
+  await filters.getByRole('button', { name: 'Income', exact: true }).click()
+  await expect(page.locator('.ledger-row')).toHaveCount(2)
+  await expect(page.locator('.ledger-row.income')).toHaveCount(2)
+  await expect(page.locator('.month-total')).toHaveText(totals, { useInnerText: true })
+  await filters.getByRole('button', { name: 'Transfer', exact: true }).click()
+  await expect(page.locator('.ledger-row.transfer')).toHaveCount(3)
+  await filters.getByRole('button', { name: 'All', exact: true }).click()
+  await expect(page.locator('.ledger-row')).toHaveCount(8)
+})
+
+test('follows the system theme and saves explicit changes across pages and reloads', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' })
+  await page.goto('/?visual=home-dashboard')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await page.getByRole('button', { name: 'Switch light or dark theme' }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  await page.getByRole('button', { name: 'Profile', exact: true }).click()
+  await page.getByRole('button', { name: 'Switch light or dark theme' }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await page.emulateMedia({ colorScheme: 'light' })
+  await page.reload()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
 })

@@ -3,7 +3,7 @@ import { visualQaScreens } from './screens'
 export default function VisualQaPage() {
   return <main className="visual-qa-page">
     <header>
-      <p>MeowJot visual QA</p>
+      <p>Paper butter visual QA</p>
       <h1>Reference and Playwright captures</h1>
       <span>Viewport 414 × 896. Refresh after running <code>pnpm visual:capture</code>.</span>
     </header>

@@ -4,7 +4,7 @@ test('imports gallery receipts immediately and opens one for editing', async ({ 
   await page.goto('/')
   await page.addStyleTag({ content: '.vc-switch, #__vconsole { display: none !important; }' })
 
-  await page.getByRole('button', { name: 'สแกนใบเสร็จ' }).click()
+  await page.getByRole('button', { name: 'Scan receipt' }).click()
   await expect(page.getByRole('dialog', { name: 'สแกนใบเสร็จ' })).toBeVisible()
   await page.getByRole('button', { name: /เลือกจากคลังรูปภาพ/ }).click()
 
@@ -24,7 +24,7 @@ test('imports gallery receipts immediately and opens one for editing', async ({ 
 test('shows imported uncategorized expenses in the summary', async ({ page }) => {
   await page.goto('/')
   await page.addStyleTag({ content: '.vc-switch, #__vconsole { display: none !important; }' })
-  await page.getByRole('button', { name: 'สแกนใบเสร็จ' }).click()
+  await page.getByRole('button', { name: 'Scan receipt' }).click()
   await page.getByRole('button', { name: /เลือกจากคลังรูปภาพ/ }).click()
 
   const results = page.getByRole('dialog', { name: 'ผลการสแกนใบเสร็จ' })
