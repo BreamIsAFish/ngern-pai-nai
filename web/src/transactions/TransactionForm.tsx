@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import CategoryIcon from '../categories/CategoryIcon'
+import categoryIconBackground from '../categories/categoryIconBackground'
 import CategoryPickerDialog from '../categories/CategoryPickerDialog'
 import type { Category } from '../categories/model'
 import type { Tag } from '../tags/model'
@@ -50,8 +51,8 @@ export default function TransactionForm({ categories, initialCategoryPickerOpen 
         </>}
       </section>
       {draft.type !== 'transfer' && <section className="entry-category-card">
-        <button aria-invalid={Boolean(errors.category)} aria-label={draft.category ? `Category, ${draft.category}` : 'Choose category'} className={`category-selection-button ${categoryPickerOpen ? 'open' : ''}`} onClick={() => setCategoryPickerOpen(true)} type="button"><span className="category-selection-icon"><CategoryIcon iconUrl={selectedCategory?.iconUrl ?? null} /></span><span><strong>{draft.category || 'Choose category / tag'}</strong>{draft.tag && <small>#{draft.tag}</small>}</span><Icon name="chevron-right" size={20} /></button>
-        <div className="entry-category-grid">{available.map((category) => <button aria-label={category.name} aria-pressed={draft.category === category.name} key={category.id} onClick={() => setDraft({ ...draft, category: category.name })} type="button"><span className="entry-category-icon"><CategoryIcon iconUrl={category.iconUrl} /></span><span>{category.name}</span></button>)}</div>
+        <button aria-invalid={Boolean(errors.category)} aria-label={draft.category ? `Category, ${draft.category}` : 'Choose category'} className={`category-selection-button ${categoryPickerOpen ? 'open' : ''}`} onClick={() => setCategoryPickerOpen(true)} type="button"><span className="category-selection-icon" style={{ background: categoryIconBackground(draft.type) }}><CategoryIcon iconUrl={selectedCategory?.iconUrl ?? null} /></span><span><strong>{draft.category || 'Choose category / tag'}</strong>{draft.tag && <small>#{draft.tag}</small>}</span><Icon name="chevron-right" size={20} /></button>
+        <div className="entry-category-grid">{available.map((category) => <button aria-label={category.name} aria-pressed={draft.category === category.name} key={category.id} onClick={() => setDraft({ ...draft, category: category.name })} type="button"><span className="entry-category-icon" style={{ background: categoryIconBackground(category.type) }}><CategoryIcon iconUrl={category.iconUrl} /></span><span>{category.name}</span></button>)}</div>
       </section>}
       {errors.category && <em className="field-error">{errors.category}</em>}
       {draft.type !== 'transfer' && <button className="future-option" disabled title="Coming later" type="button"><Icon name="repeat" /> <span>Schedule again</span><small>Coming later</small></button>}

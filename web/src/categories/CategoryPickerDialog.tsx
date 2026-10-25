@@ -2,6 +2,7 @@ import type { Category } from './model'
 import type { Tag } from '../tags/model'
 import Icon from '../ui/Icon'
 import CategoryIcon from './CategoryIcon'
+import categoryIconBackground from './categoryIconBackground'
 
 interface Props {
   categories: Category[]
@@ -44,7 +45,7 @@ export default function CategoryPickerDialog({
       <div className="category-picker-scroll">
         <div className="category-picker-grid">
           {categories.map((category) => <button aria-label={category.name} aria-pressed={selectedCategory === category.name} key={category.id} onClick={() => onSelectCategory?.(category)} type="button">
-            <span className="category-picker-icon"><CategoryIcon iconUrl={category.iconUrl} /></span>
+            <span className="category-picker-icon" style={{ background: categoryIconBackground(category.type) }}><CategoryIcon iconUrl={category.iconUrl} /></span>
             <span>{category.name}</span>
           </button>)}
         </div>

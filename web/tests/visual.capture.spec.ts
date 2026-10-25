@@ -433,7 +433,7 @@ test('shows category icons and uses each pie-slice color beside its category nam
   await page.goto('/?visual=summary')
   await expect(page.locator('[data-visual-ready="true"]')).toBeVisible()
 
-  const rows = page.locator('.breakdown-list > div')
+  const rows = page.locator('.breakdown-list > button')
   await expect(rows).toHaveCount(2)
   await expect(rows.locator('[data-category-icon-source="image"]')).toHaveCount(2)
 
@@ -471,4 +471,29 @@ test('follows the system theme and saves explicit changes across pages and reloa
   await page.emulateMedia({ colorScheme: 'light' })
   await page.reload()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+})
+
+test('opens a Summary category to list its entries and returns to Summary', async ({ page }) => {
+  await page.goto('/?visual=summary')
+  await expect(page.locator('[data-visual-ready="true"]')).toBeVisible()
+
+  const firstRow = page.locator('.breakdown-list > button').first()
+  const name = (await firstRow.locator('.breakdown-name > span').textContent())?.trim() ?? ''
+  await firstRow.click()
+  await expect(page.locator('.summary-drill-header h1')).toHaveText(name)
+  const entries = page.locator('.summary-drill .ledger-row')
+  expect(await entries.count()).toBeGreaterThan(0)
+  for (const category of await entries.locator('.row-copy > strong').allTextContents()) expect(category).toBe(name)
+
+  await page.getByRole('button', { name: 'Back to Summary' }).click()
+  await expect(page.locator('.breakdown-list > button')).not.toHaveCount(0)
+})
+
+test('colors category icon tiles by transaction type', async ({ page }) => {
+  await page.goto('/?visual=summary')
+  await expect(page.locator('[data-visual-ready="true"]')).toBeVisible()
+  const expected = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--pastel-1').trim())
+  const tile = await page.locator('.breakdown-icon').first().evaluate((element) => getComputedStyle(element).backgroundColor)
+  const probe = await page.evaluate((color) => { const element = document.createElement('i'); element.style.background = color; document.body.append(element); const value = getComputedStyle(element).backgroundColor; element.remove(); return value }, expected)
+  expect(tile).toBe(probe)
 })

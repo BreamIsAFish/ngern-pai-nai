@@ -3,6 +3,7 @@ import bridge from '../bridge/client'
 import Icon from '../ui/Icon'
 import isWithinCharacterLimit from '../text/isWithinCharacterLimit'
 import CategoryIcon from './CategoryIcon'
+import categoryIconBackground from './categoryIconBackground'
 import type { Category, CategoryInput, CategoryType } from './model'
 import mapCategory from './model'
 
@@ -35,7 +36,7 @@ export default function CategoryManager({ categories, initialType = 'expense', o
   return <ManagerShell action={<button className="manager-text-action" disabled type="button">Manage</button>} onBack={onBack} title="My categories" variant="categories">
     <div className="manager-tabs"><button className={type === 'expense' ? 'active' : ''} onClick={() => { setType('expense'); reset() }} type="button"><Icon name="arrow-up" /> Expense</button><button className={type === 'income' ? 'active' : ''} onClick={() => { setType('income'); reset() }} type="button"><Icon name="arrow-down" /> Income</button></div>
     <div className="manager-count category-count"><strong>{type === 'expense' ? 'Expense categories' : 'Income categories'}</strong><span>Custom {customCount}/50</span></div>
-    <div className="manager-list category-list">{items.map((item) => <button className={editing?.id === item.id ? 'selected' : ''} key={item.id} onClick={() => edit(item)} type="button"><span className="manager-icon"><CategoryIcon iconUrl={item.iconUrl} /></span><strong>{item.name}</strong><small>{item.isDefault ? 'Locked' : 'Tap to edit'}</small></button>)}</div>
+    <div className="manager-list category-list">{items.map((item) => <button className={editing?.id === item.id ? 'selected' : ''} key={item.id} onClick={() => edit(item)} type="button"><span className="manager-icon" style={{ background: categoryIconBackground(item.type) }}><CategoryIcon iconUrl={item.iconUrl} /></span><strong>{item.name}</strong><small>{item.isDefault ? 'Locked' : 'Tap to edit'}</small></button>)}</div>
     <button className="manager-add-button" disabled={customCount >= 50} onClick={() => setAdding(true)} type="button"><Icon name="plus" size={25} /> Add category</button>
     {adding && <div className="manager-overlay"><button aria-label="Close editor" className="manager-scrim" onClick={reset} type="button" /><div className="manager-editor"><header><h3>{editing ? 'Edit category' : 'Add category'}</h3><button aria-label="Close" onClick={reset} type="button"><Icon name="close" size={28} /></button></header><input onChange={(event) => setName(event.target.value)} placeholder="Category name" value={name} /><input onChange={(event) => setIconUrl(event.target.value)} placeholder="HTTPS icon URL (optional)" type="url" value={iconUrl} /><button className="primary-action" disabled={!name.trim() || (!editing && customCount >= 50)} onClick={() => void save()} type="button">{editing ? 'Save changes' : 'Add category'}</button>{editing && <button className="danger-link" onClick={() => void remove()} type="button">Delete category</button>}</div></div>}
   </ManagerShell>
