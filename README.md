@@ -47,4 +47,4 @@ Issues and pull requests are welcome. Follow [Run it yourself](docs/run-it-yours
 
 ## Support me
 
-If you like the project, consider buying me a cup of coffee.
+If you like the project, consider buying me a cup of coffee. ☕️
