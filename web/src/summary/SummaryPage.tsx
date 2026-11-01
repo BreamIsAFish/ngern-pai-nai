@@ -9,7 +9,7 @@ import { transactionLocalMonth } from '../transactions/time'
 import Icon from '../ui/Icon'
 import Hamster from '../ui/Hamster'
 import BottomNav from '../ui/BottomNav'
-import filterBreakdownEntries, { type Breakdown, breakdownKey, uncategorizedLabel } from './filterBreakdownEntries'
+import filterBreakdownEntries, { type Breakdown, breakdownKeys, uncategorizedLabel } from './filterBreakdownEntries'
 
 interface Props {
   categories: Category[]
@@ -40,12 +40,12 @@ export default function SummaryPage({ categories, initialView = 'chart', latestM
   const total = (kind: TransactionType) => rows.filter((item) => item.type === kind).reduce((sum, item) => sum + item.amount, 0)
   const selected = rows.filter((item) => item.type === type)
   const selectedTotal = total(type)
+  // A transaction with multiple tags contributes its amount and count under each selected tag.
   const grouped = selected.reduce<Record<string, number>>((result, item) => {
-    const key = breakdownKey(item, breakdown)
-    return { ...result, [key]: (result[key] ?? 0) + item.amount }
+    return breakdownKeys(item, breakdown).reduce((next, key) => ({ ...next, [key]: (next[key] ?? 0) + item.amount }), result)
   }, {})
   const groups = Object.entries(grouped)
-    .map(([name, amount]) => ({ name, amount, count: selected.filter((item) => breakdownKey(item, breakdown) === name).length }))
+    .map(([name, amount]) => ({ name, amount, count: selected.filter((item) => breakdownKeys(item, breakdown).includes(name)).length }))
     .sort((a, b) => b.amount - a.amount)
     .map((group, index) => ({
       ...group,

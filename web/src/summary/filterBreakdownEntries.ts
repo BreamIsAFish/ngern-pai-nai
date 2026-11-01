@@ -1,13 +1,15 @@
 import type { Transaction, TransactionType } from '../transactions/model'
+import { parseTags } from '../tags/tagList'
 
 export type Breakdown = 'category' | 'tag'
 
 export const uncategorizedLabel = 'ไม่มีหมวดหมู่'
 export const untaggedLabel = 'No tag'
 
-/** Returns the Summary group name a transaction belongs to. */
-export function breakdownKey(item: Transaction, breakdown: Breakdown): string {
-  return breakdown === 'category' ? item.category ?? uncategorizedLabel : item.tag ?? untaggedLabel
+export function breakdownKeys(item: Transaction, breakdown: Breakdown): string[] {
+  if (breakdown === 'category') return [item.category ?? uncategorizedLabel]
+  const tags = parseTags(item.tag)
+  return tags.length ? tags : [untaggedLabel]
 }
 
 interface Options {
@@ -18,5 +20,5 @@ interface Options {
 
 /** Lists the entries behind one Summary category or tag row. */
 export default function filterBreakdownEntries(rows: Transaction[], { breakdown, name, type }: Options): Transaction[] {
-  return rows.filter((item) => item.type === type && breakdownKey(item, breakdown) === name)
+  return rows.filter((item) => item.type === type && breakdownKeys(item, breakdown).includes(name))
 }

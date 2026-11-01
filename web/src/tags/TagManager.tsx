@@ -15,6 +15,7 @@ export default function TagManager({ tags, initialAdding = false, visualKeyboard
   const reset = () => { setEditing(undefined); setAdding(false); setName('') }
   const save = async () => {
     const value = name.trim()
+    if (value.includes(',')) return setError('Tag names cannot contain commas.')
     if (!value || !isWithinCharacterLimit({ value, limit: 20 })) return setError('Tag names must be 1–20 characters.')
     try {
       const result = editing ? await bridge.request('tags.update', { id: editing.id, tag: { name: value } }) : await bridge.request('tags.create', { tag: { name: value } })

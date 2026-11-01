@@ -10,6 +10,8 @@ import validateTransaction from './validation'
 import Icon from '../ui/Icon'
 import Hamster from '../ui/Hamster'
 import isValidAmountInput from './isValidAmountInput'
+import { formatTags, parseTags, serializeTags, toggleTag } from '../tags/tagList'
+import { transactionTags } from './model'
 
 interface Props { categories: Category[]; initialCategoryPickerOpen?: boolean; initialType?: TransactionType; tags: Tag[]; transaction?: Transaction; onCancel(): void; onSubmit(input: TransactionInput): void; onDelete?(): void; onManageCategories?(): void; onManageTags?(): void }
 
@@ -43,7 +45,7 @@ export default function TransactionForm({ categories, initialCategoryPickerOpen 
         {errors.localDate && <em className="field-error">{errors.localDate}</em>}
         <label className="note-panel"><span>Note</span><input aria-invalid={Boolean(errors.note)} onChange={(event) => setDraft({ ...draft, note: event.target.value })} placeholder="Add note" value={draft.note} /></label>
         {errors.note && <em className="field-error">{errors.note}</em>}
-        {draft.type !== 'transfer' && <div className="entry-tags"><span>Tags</span><button aria-label="Choose tag" onClick={() => setCategoryPickerOpen(true)} type="button">{draft.tag ? `#${draft.tag}` : '+ tag'}</button></div>}
+        {draft.type !== 'transfer' && <div className="entry-tags"><span>Tags</span><button aria-label="Choose tags" onClick={() => setCategoryPickerOpen(true)} type="button">{draft.tag ? formatTags(draft.tag) : '+ tag'}</button></div>}
         {draft.source === 'receipt_ai' && <>
           <label className="note-panel"><span><Icon name="store" /></span><input onChange={(event) => setDraft({ ...draft, destination: event.target.value || null })} placeholder="ชื่อร้าน" value={draft.destination ?? ''} /></label>
           <label className="note-panel"><span><Icon name="receipt" /></span><input onChange={(event) => setDraft({ ...draft, transactionNumber: event.target.value || null })} placeholder="เลขที่รายการ" value={draft.transactionNumber ?? ''} /></label>
@@ -51,7 +53,7 @@ export default function TransactionForm({ categories, initialCategoryPickerOpen 
         </>}
       </section>
       {draft.type !== 'transfer' && <section className="entry-category-card">
-        <button aria-invalid={Boolean(errors.category)} aria-label={draft.category ? `Category, ${draft.category}` : 'Choose category'} className={`category-selection-button ${categoryPickerOpen ? 'open' : ''}`} onClick={() => setCategoryPickerOpen(true)} type="button"><span className="category-selection-icon" style={{ background: categoryIconBackground(draft.type) }}><CategoryIcon iconUrl={selectedCategory?.iconUrl ?? null} /></span><span><strong>{draft.category || 'Choose category / tag'}</strong>{draft.tag && <small>#{draft.tag}</small>}</span><Icon name="chevron-right" size={20} /></button>
+        <button aria-invalid={Boolean(errors.category)} aria-label={draft.category ? `Category, ${draft.category}` : 'Choose category'} className={`category-selection-button ${categoryPickerOpen ? 'open' : ''}`} onClick={() => setCategoryPickerOpen(true)} type="button"><span className="category-selection-icon" style={{ background: categoryIconBackground(draft.type) }}><CategoryIcon iconUrl={selectedCategory?.iconUrl ?? null} /></span><span><strong>{draft.category || 'Choose category / tag'}</strong>{draft.tag && <small>{formatTags(draft.tag)}</small>}</span><Icon name="chevron-right" size={20} /></button>
         <div className="entry-category-grid">{available.map((category) => <button aria-label={category.name} aria-pressed={draft.category === category.name} key={category.id} onClick={() => setDraft({ ...draft, category: category.name })} type="button"><span className="entry-category-icon" style={{ background: categoryIconBackground(category.type) }}><CategoryIcon iconUrl={category.iconUrl} /></span><span>{category.name}</span></button>)}</div>
       </section>}
       {errors.category && <em className="field-error">{errors.category}</em>}
@@ -66,9 +68,9 @@ export default function TransactionForm({ categories, initialCategoryPickerOpen 
       onManageCategories={() => { setCategoryPickerOpen(false); onManageCategories?.() }}
       onManageTags={() => { setCategoryPickerOpen(false); onManageTags?.() }}
       onSelectCategory={(category) => { setDraft({ ...draft, category: category.name }); setCategoryPickerOpen(false) }}
-      onToggleTag={(tag) => setDraft({ ...draft, tag: draft.tag === tag.name ? null : tag.name })}
+      onToggleTag={(tag) => setDraft({ ...draft, tag: serializeTags(toggleTag(parseTags(draft.tag), tag.name)) })}
       selectedCategory={draft.category}
-      selectedTag={draft.tag}
+      selectedTags={transactionTags(draft)}
       tags={tags}
     />}
   </main>

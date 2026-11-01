@@ -7,7 +7,7 @@ import categoryIconBackground from './categoryIconBackground'
 interface Props {
   categories: Category[]
   selectedCategory: string
-  selectedTag: string | null
+  selectedTags: string[]
   tags: Tag[]
   onCancel?(): void
   onClearTag?(): void
@@ -21,7 +21,7 @@ interface Props {
 export default function CategoryPickerDialog({
   categories,
   selectedCategory,
-  selectedTag,
+  selectedTags,
   tags,
   onCancel,
   onClearTag,
@@ -38,8 +38,8 @@ export default function CategoryPickerDialog({
         <button aria-label="Close" onClick={onCancel} type="button"><Icon name="close" size={27} /></button>
       </header>
       <div className="category-picker-tag-bar">
-        <button aria-label="Clear tag" className={`category-picker-hash ${selectedTag ? '' : 'selected'}`} onClick={onClearTag} type="button">#</button>
-        {tags.map((tag) => <button aria-pressed={selectedTag === tag.name} className="category-picker-tag" key={tag.id} onClick={() => onToggleTag?.(tag)} type="button">{tag.name}</button>)}
+        <button aria-label="Clear tags" className={`category-picker-hash ${selectedTags.length ? '' : 'selected'}`} onClick={onClearTag} type="button">#</button>
+        {tags.map((tag) => <button aria-pressed={selectedTags.some((name) => name.toLowerCase() === tag.name.toLowerCase())} className="category-picker-tag" key={tag.id} onClick={() => onToggleTag?.(tag)} type="button">{tag.name}</button>)}
         <button className="category-picker-add-tag" onClick={onManageTags} type="button"><Icon name="plus" size={18} /> Add tag</button>
       </div>
       <div className="category-picker-scroll">

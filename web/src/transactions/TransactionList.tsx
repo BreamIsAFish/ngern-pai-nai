@@ -6,6 +6,7 @@ import type { Transaction } from './model'
 import summarizeDailyTransactions from './summarizeDailyTransactions'
 import { transactionInstant, transactionLocalDate } from './time'
 import TransactionDailySummary from './TransactionDailySummary'
+import { formatTags } from '../tags/tagList'
 
 interface Props { categories: Category[]; transactions: Transaction[]; onEdit(item: Transaction): void }
 const money = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 })
@@ -25,7 +26,7 @@ export default function TransactionList({ categories, transactions, onEdit }: Pr
       <TransactionDailySummary summary={dailySummary} />
       {items.map((item) => <button className={`ledger-row ${item.type}`} data-category={item.category ?? undefined} key={item.id} onClick={() => onEdit(item)} type="button">
         <span className="row-icon" style={{ background: categoryIconBackground(item.type) }}><CategoryIcon iconUrl={categories.find((category) => category.type === item.type && category.name === item.category)?.iconUrl ?? null} /></span>
-        <span className="row-copy"><strong>{item.category ?? 'ไม่มีหมวดหมู่'}</strong><span>{item.destination ?? (item.note || 'No note')}</span>{item.destination && item.note && <small>{item.note}</small>}{item.tag && <small>#{item.tag}</small>}{item.dateInferred && <small className="receipt-warning">วันที่โดยประมาณ</small>}<small>{new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit' }).format(transactionInstant(item))}</small></span>
+        <span className="row-copy"><strong>{item.category ?? 'ไม่มีหมวดหมู่'}</strong><span>{item.destination ?? (item.note || 'No note')}</span>{item.destination && item.note && <small>{item.note}</small>}{item.tag && <small>{formatTags(item.tag)}</small>}{item.dateInferred && <small className="receipt-warning">วันที่โดยประมาณ</small>}<small>{new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit' }).format(transactionInstant(item))}</small></span>
         <b className="row-amount">{item.type === 'income' ? '+' : ''}{money.format(item.amount)}</b>
       </button>)}
     </section>

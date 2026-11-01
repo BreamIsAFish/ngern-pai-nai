@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import type { Category } from '../categories/model'
 import type { Transaction } from '../transactions/model'
 import TransactionList from '../transactions/TransactionList'
+import matchesTransactionSearch from './matchesTransactionSearch'
 import { latestUtcMonths, transactionInstant, utcMonthsForYear } from '../transactions/time'
 import Icon from '../ui/Icon'
 import VisualKeyboard from '../ui/VisualKeyboard'
@@ -17,7 +18,7 @@ export default function SearchPage({ categories, fetchTransactions, visualKeyboa
   const matches = useMemo(() => {
     const term = query.trim().toLocaleLowerCase()
     if (!term) return []
-    return rows.filter((item) => [item.tag, item.category, item.note, item.destination, String(item.amount)].some((value) => value?.toLocaleLowerCase().includes(term))).sort((a, b) => transactionInstant(b).getTime() - transactionInstant(a).getTime())
+    return rows.filter((item) => matchesTransactionSearch(item, term)).sort((a, b) => transactionInstant(b).getTime() - transactionInstant(a).getTime())
   }, [query, rows])
   const changeYear = (direction: number) => {
     const year = range === 'latest' ? new Date().getFullYear() - 1 : Math.min(new Date().getFullYear(), range + direction)

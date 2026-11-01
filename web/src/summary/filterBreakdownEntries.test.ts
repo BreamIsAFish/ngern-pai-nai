@@ -10,11 +10,12 @@ const rows = [
   entry('salary', { type: 'income', category: 'Food' }),
   entry('loose', { type: 'expense' }),
   entry('bus', { type: 'expense', category: 'Transport', tag: 'trip' }),
+  entry('multi', { type: 'expense', category: 'Food', tag: 'food, trip' }),
 ]
 
 describe('filterBreakdownEntries', () => {
   it('keeps only entries in the tapped category for the active type', () => {
-    expect(filterBreakdownEntries(rows, { breakdown: 'category', name: 'Food', type: 'expense' }).map((item) => item.id)).toEqual(['food-1', 'food-2'])
+    expect(filterBreakdownEntries(rows, { breakdown: 'category', name: 'Food', type: 'expense' }).map((item) => item.id)).toEqual(['food-1', 'food-2', 'multi'])
   })
 
   it('matches the uncategorized row', () => {
@@ -22,7 +23,8 @@ describe('filterBreakdownEntries', () => {
   })
 
   it('filters by tag, including the untagged row', () => {
-    expect(filterBreakdownEntries(rows, { breakdown: 'tag', name: 'trip', type: 'expense' }).map((item) => item.id)).toEqual(['food-1', 'bus'])
+    expect(filterBreakdownEntries(rows, { breakdown: 'tag', name: 'trip', type: 'expense' }).map((item) => item.id)).toEqual(['food-1', 'bus', 'multi'])
+    expect(filterBreakdownEntries(rows, { breakdown: 'tag', name: 'food', type: 'expense' }).map((item) => item.id)).toEqual(['multi'])
     expect(filterBreakdownEntries(rows, { breakdown: 'tag', name: 'No tag', type: 'expense' }).map((item) => item.id)).toEqual(['food-2', 'loose'])
   })
 })

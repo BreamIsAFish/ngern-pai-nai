@@ -1,3 +1,5 @@
+import { parseTags } from '../tags/tagList'
+
 export type TransactionType = 'income' | 'expense' | 'transfer'
 export type TransactionSource = 'manual' | 'receipt_ai'
 
@@ -34,6 +36,9 @@ export interface TransactionDraft {
   source: TransactionSource
   dateInferred: boolean
 }
+
+/** UI helper for the comma-separated transaction wire field. */
+export const transactionTags = (transaction: Pick<TransactionInput, 'tag'>): string[] => parseTags(transaction.tag)
 
 /** Converts an unknown native-bridge value into a validated transaction. */
 export default function mapTransaction(value: unknown): Transaction {
