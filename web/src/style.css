@@ -77,7 +77,7 @@ body, .phone-canvas, .transaction-screen {
   background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
   background-size: 22px 22px;
 }
-button, input, select { font: inherit; color: inherit; }
+button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: default; opacity: .45; }
 button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline: 3px solid var(--bar); outline-offset: 3px; }
@@ -200,10 +200,10 @@ a { color: inherit; }
 .entry-date, .note-panel, .entry-tags { align-items: center; display: flex; gap: 8px; min-height: 54px; }
 .entry-date, .note-panel { border-bottom: 1px solid var(--line); }
 .entry-date > span, .note-panel > span, .entry-tags > span { color: var(--muted); flex-shrink: 0; font-size: 14px; font-weight: 700; }
-.entry-date input { background: transparent; border: 0; font-size: 13px; min-width: 0; padding: 0; }
+.entry-date input { background: transparent; border: 0; font-size: 16px; min-width: 0; padding: 0; }
 .entry-date input[type="date"] { flex: 1; text-align: right; }
-.entry-date input[type="time"] { width: 80px; }
-.note-panel input { background: transparent; border: 0; font-size: 15px; font-weight: 700; min-width: 0; outline: 0; padding: 0; text-align: right; width: 100%; }
+.entry-date input[type="time"] { width: 96px; }
+.note-panel input { background: transparent; border: 0; font-size: 16px; font-weight: 700; min-width: 0; outline: 0; padding: 0; text-align: right; width: 100%; }
 .entry-tags { justify-content: space-between; }
 .entry-tags button { background: var(--pastel-4); border: 1.5px dashed var(--edge); border-radius: 999px; font-size: 13px; padding: 5px 10px; }
 .entry-category-card { padding: 14px; }
