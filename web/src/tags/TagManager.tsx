@@ -2,12 +2,13 @@ import { useState } from 'react'
 import bridge from '../bridge/client'
 import { ManagerShell } from '../categories/CategoryManager'
 import Icon from '../ui/Icon'
+import type { ReportError } from '../ui/errorDetails'
 import isWithinCharacterLimit from '../text/isWithinCharacterLimit'
 import VisualKeyboard from '../ui/VisualKeyboard'
 import type { Tag } from './model'
 import mapTag from './model'
 
-interface Props { busy: boolean; tags: Tag[]; initialAdding?: boolean; visualKeyboard?: boolean; onBack(): void; onChange(items: Tag[]): void; setError(value?: string): void; setNotice(value?: string): void }
+interface Props { busy: boolean; tags: Tag[]; initialAdding?: boolean; visualKeyboard?: boolean; onBack(): void; onChange(items: Tag[]): void; setError: ReportError; setNotice(value?: string): void }
 export default function TagManager({ tags, initialAdding = false, visualKeyboard = false, onBack, onChange, setError }: Props) {
   const [editing, setEditing] = useState<Tag>()
   const [adding, setAdding] = useState(initialAdding)
@@ -20,12 +21,12 @@ export default function TagManager({ tags, initialAdding = false, visualKeyboard
     try {
       const result = editing ? await bridge.request('tags.update', { id: editing.id, tag: { name: value } }) : await bridge.request('tags.create', { tag: { name: value } })
       const tag = mapTag(result); onChange(editing ? tags.map((item) => item.id === editing.id ? tag : item) : [...tags, tag]); reset()
-    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not save tag.') }
+    } catch (caught) { setError(caught, 'Could not save tag.') }
   }
   const remove = async () => {
     if (!editing || !window.confirm(`Delete #${editing.name}? Existing transactions keep this tag.`)) return
     try { await bridge.request('tags.delete', { id: editing.id }); onChange(tags.filter((item) => item.id !== editing.id)); reset() }
-    catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not delete tag.') }
+    catch (caught) { setError(caught, 'Could not delete tag.') }
   }
   const suggestions = ['❤️ Treat myself', 'Friends', 'Credit card', 'Cash', 'Japan trip']
   return <ManagerShell action={<button className="manager-text-action" disabled type="button">Manage</button>} onBack={onBack} title="My tags" variant="tags">

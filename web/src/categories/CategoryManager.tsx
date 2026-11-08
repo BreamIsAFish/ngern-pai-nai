@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import bridge from '../bridge/client'
 import Icon from '../ui/Icon'
+import type { ReportError } from '../ui/errorDetails'
 import isWithinCharacterLimit from '../text/isWithinCharacterLimit'
 import CategoryIcon from './CategoryIcon'
 import categoryIconBackground from './categoryIconBackground'
 import type { Category, CategoryInput, CategoryType } from './model'
 import mapCategory from './model'
 
-interface Props { busy: boolean; categories: Category[]; initialType?: CategoryType; onBack(): void; onChange(items: Category[]): void; setError(value?: string): void; setNotice(value?: string): void }
+interface Props { busy: boolean; categories: Category[]; initialType?: CategoryType; onBack(): void; onChange(items: Category[]): void; setError: ReportError; setNotice(value?: string): void }
 export default function CategoryManager({ categories, initialType = 'expense', onBack, onChange, setError }: Props) {
   const [type, setType] = useState<CategoryType>(initialType)
   const [editing, setEditing] = useState<Category>()
@@ -26,12 +27,12 @@ export default function CategoryManager({ categories, initialType = 'expense', o
       const result = editing ? await bridge.request('categories.update', { id: editing.id, category: input }) : await bridge.request('categories.create', { category: input })
       const category = mapCategory(result)
       onChange(editing ? categories.map((item) => item.id === editing.id ? category : item) : [...categories, category]); reset()
-    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not save category.') }
+    } catch (caught) { setError(caught, 'Could not save category.') }
   }
   const remove = async () => {
     if (!editing || !window.confirm(`Delete “${editing.name}”? Existing transactions keep this name.`)) return
     try { await bridge.request('categories.delete', { id: editing.id }); onChange(categories.filter((item) => item.id !== editing.id)); reset() }
-    catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not delete category.') }
+    catch (caught) { setError(caught, 'Could not delete category.') }
   }
   return <ManagerShell action={<button className="manager-text-action" disabled type="button">Manage</button>} onBack={onBack} title="My categories" variant="categories">
     <div className="manager-tabs"><button className={type === 'expense' ? 'active' : ''} onClick={() => { setType('expense'); reset() }} type="button"><Icon name="arrow-up" /> Expense</button><button className={type === 'income' ? 'active' : ''} onClick={() => { setType('income'); reset() }} type="button"><Icon name="arrow-down" /> Income</button></div>

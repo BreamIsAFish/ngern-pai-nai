@@ -23,6 +23,8 @@ import mapTransaction from '../transactions/model'
 import TransactionForm from '../transactions/TransactionForm'
 import { localDateValue, transactionLocalMonth, utcMonthForTransaction, utcMonthsForLocalMonth } from '../transactions/time'
 import LoadingScreen from '../ui/LoadingScreen'
+import ErrorToast from '../ui/ErrorToast'
+import errorDetails, { type ErrorDetails } from '../ui/errorDetails'
 import { currentVisualState } from '../visual-qa/screens'
 
 type Screen = 'home' | 'profile' | 'sheet' | 'meowjot-import' | 'summary' | 'search' | 'categories' | 'tags'
@@ -48,7 +50,10 @@ export default function App() {
   const [monthLoading, setMonthLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string>()
+  const [error, setErrorDetails] = useState<ErrorDetails>()
+  const setError = useCallback((caught?: unknown, fallback?: string) => {
+    setErrorDetails(caught === undefined && fallback === undefined ? undefined : errorDetails(caught, fallback))
+  }, [])
   const [notice, setNotice] = useState<string>()
   const [meowJotImportResult, setMeowJotImportResult] = useState<MeowJotImportResult>()
   const [tagManagerAdding, setTagManagerAdding] = useState(false)
@@ -93,7 +98,7 @@ export default function App() {
         if (visualState?.startsWith('edit-transaction') && rows[0]) setEditing(rows[0])
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not open your data.')
+      setError(caught, 'Could not open your data.')
     } finally { setLoading(false) }
   }, [fetchTransactions, month, visualState])
 
@@ -105,7 +110,7 @@ export default function App() {
     try {
       await bridge.request('google.signIn', {})
       await load()
-    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Google connection failed.') }
+    } catch (caught) { setError(caught, 'Google connection failed.') }
     finally { setBusy(false) }
   }
 
@@ -114,20 +119,20 @@ export default function App() {
     try {
       setStatus(await bridge.request(operation, {}))
       await load()
-    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not recover your spreadsheet.') }
+    } catch (caught) { setError(caught, 'Could not recover your spreadsheet.') }
     finally { setBusy(false) }
   }
 
   const resetTransactions = async () => {
     setBusy(true); setError(undefined)
     try { await bridge.request('sheet.resetTransactions', {}); await load() }
-    catch (caught) { setError(caught instanceof Error ? caught.message : 'อัปเดต Google Sheet ไม่ได้') }
+    catch (caught) { setError(caught, 'อัปเดต Google Sheet ไม่ได้') }
     finally { setBusy(false) }
   }
 
   const manageAi = async () => {
     try { setAiStatus(await bridge.request('ai.openSettings', {})) }
-    catch (caught) { setError(caught instanceof Error ? caught.message : 'เปิดการตั้งค่าผู้ให้บริการ AI ไม่ได้') }
+    catch (caught) { setError(caught, 'เปิดการตั้งค่าผู้ให้บริการ AI ไม่ได้') }
   }
 
   const selectReceiptSource = async (source: 'camera' | 'gallery') => {
@@ -152,7 +157,7 @@ export default function App() {
         setReceiptSelection({ batchId: selection.batchId, images: selection.images })
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'เลือกรูปใบเสร็จไม่ได้')
+      setError(caught, 'เลือกรูปใบเสร็จไม่ได้')
     }
   }
 
@@ -163,7 +168,7 @@ export default function App() {
     monthLoadScheduler.current.schedule({
       request: () => fetchTransactions(utcMonthsForLocalMonth(value)),
       onSuccess: setTransactions,
-      onError: (caught) => setError(caught instanceof Error ? caught.message : 'Could not load this month.'),
+      onError: (caught) => setError(caught, 'Could not load this month.'),
       onSettled: () => setMonthLoading(false),
     })
   }
@@ -201,9 +206,11 @@ export default function App() {
           const rolledBack = current.filter((item) => item.id !== optimistic.id)
           return original && transactionLocalMonth(original) === monthRef.current ? [original, ...rolledBack] : rolledBack
         })
-        setError(caught instanceof BridgeRequestError && caught.code === 'DUPLICATE_RECEIPT'
-          ? 'รายการนี้ซ้ำกับรายการที่มีอยู่'
-          : caught instanceof Error ? caught.message : 'Could not save the transaction.')
+        const details = errorDetails(caught, 'Could not save the transaction.')
+        if (caught instanceof BridgeRequestError && caught.code === 'DUPLICATE_RECEIPT') {
+          details.message = 'รายการนี้ซ้ำกับรายการที่มีอยู่'
+        }
+        setErrorDetails(details)
       } finally {
         pendingTransactionIds.current.delete(optimistic.id)
       }
@@ -223,7 +230,7 @@ export default function App() {
         setTransactions((current) => transactionLocalMonth(transaction) === monthRef.current && !current.some((item) => item.id === transaction.id)
           ? [transaction, ...current]
           : current)
-        setError(caught instanceof Error ? caught.message : 'Could not delete the transaction.')
+        setError(caught, 'Could not delete the transaction.')
       })
       .finally(() => pendingTransactionIds.current.delete(transaction.id))
   }
@@ -238,7 +245,7 @@ export default function App() {
     try {
       const [categoryRows, tagRows] = await Promise.all([bridge.request('categories.list', {}), bridge.request('tags.list', {}), loadMonth(month)])
       setCategories(categoryRows.map(mapCategory)); setTags(tagRows.map(mapTag))
-    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not refresh your Sheet.') }
+    } catch (caught) { setError(caught, 'Could not refresh your Sheet.') }
     finally { setRefreshing(false) }
   }
 
@@ -246,14 +253,14 @@ export default function App() {
     if (refreshing) return
     setRefreshing(true); setError(undefined)
     try { setStatus(await bridge.request('sheet.bootstrap', {})) }
-    catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not refresh your Google Sheet account.') }
+    catch (caught) { setError(caught, 'Could not refresh your Google Sheet account.') }
     finally { setRefreshing(false) }
   }
 
   const disconnect = async () => {
     setBusy(true)
     try { setStatus(await bridge.request('google.disconnect', {})); setTransactions([]); setScreen('home') }
-    catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not disconnect Google.') }
+    catch (caught) { setError(caught, 'Could not disconnect Google.') }
     finally { setBusy(false) }
   }
 
@@ -264,21 +271,21 @@ export default function App() {
       setMeowJotImportResult(result)
       if (!result.cancelled) await loadMonth(month)
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not import the MeowJot CSV.')
+      setError(caught, 'Could not import the MeowJot CSV.')
     } finally { setBusy(false) }
   }
 
   if (loading) return <LoadingScreen />
-  if (status?.signedIn && status.spreadsheetTrashed) return <SpreadsheetRecoveryPage busy={busy} error={error} onCreateNew={() => void recoverSpreadsheet('sheet.createReplacement')} onRestore={() => void recoverSpreadsheet('sheet.restore')} spreadsheetUrl={status.spreadsheetUrl} />
-  if (status?.signedIn && status.schemaResetRequired) return <SchemaResetPage busy={busy} error={error} onConfirm={() => void resetTransactions()} />
-  if (!status?.signedIn || !status.sheetReady) return <SetupPage busy={busy} error={error} onConnect={() => void connect()} />
+  if (status?.signedIn && status.spreadsheetTrashed) return <SpreadsheetRecoveryPage busy={busy} error={error?.message} onCreateNew={() => void recoverSpreadsheet('sheet.createReplacement')} onRestore={() => void recoverSpreadsheet('sheet.restore')} spreadsheetUrl={status.spreadsheetUrl} />
+  if (status?.signedIn && status.schemaResetRequired) return <SchemaResetPage busy={busy} error={error?.message} onConfirm={() => void resetTransactions()} />
+  if (!status?.signedIn || !status.sheetReady) return <SetupPage busy={busy} error={error?.message} onConnect={() => void connect()} />
 
   const common = { busy, setError, setNotice }
   const visibleTransactions = transactions
   const entryType = visualState === 'add-income' ? 'income' : visualState === 'add-transfer' ? 'transfer' : 'expense'
   return (
     <div className={`phone-canvas screen-${screen}`} data-visual-ready="true">
-      {error && <div className="toast" role="alert">{error}<button className="toast-dismiss" onClick={() => setError(undefined)} type="button">Dismiss</button></div>}
+      {error && <ErrorToast error={error} onDismiss={() => setError(undefined)} />}
       {notice && <button className="toast notice" onClick={() => setNotice(undefined)} type="button">{notice}<span>Dismiss</span></button>}
       {screen === 'home' && <DashboardPage categories={categories} latestMonth={localDateValue().slice(0, 7)} loading={monthLoading} month={month} monthPickerOpenInitially={visualState === 'home-month-picker'} onAdd={() => setEditing(null)} onChangeMonth={changeMonth} onEdit={editTransaction} onOpenProfile={() => setScreen('profile')} onOpenSearch={() => setScreen('search')} onOpenSummary={() => setScreen('summary')} onRefresh={() => void refresh()} onScanReceipt={() => setReceiptSourceOpen(true)} refreshing={refreshing} showCoach={!visualState || visualState === 'home-dashboard' || visualState === 'home-month-picker'} transactions={visibleTransactions} />}
       {screen === 'profile' && <SettingsPage onSummary={() => setScreen('summary')} onAdd={() => setEditing(null)} onScanReceipt={() => setReceiptSourceOpen(true)} aiStatus={aiStatus} busy={busy} onDisconnect={() => void disconnect()} onHome={() => setScreen('home')} onImportMeowJot={() => { setMeowJotImportResult(undefined); setScreen('meowjot-import') }} onManageAi={() => void manageAi()} onManageSheet={() => setScreen('sheet')} onManageCategories={() => setScreen('categories')} onManageTags={() => { setTagManagerAdding(false); setScreen('tags') }} status={status} />}

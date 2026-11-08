@@ -3,6 +3,7 @@ import { defaultCategoryDefinitions } from '../categories/defaultCategories'
 import type { Tag } from '../tags/model'
 import type { Transaction } from '../transactions/model'
 import createRandomId from './createRandomId'
+import { BridgeRequestError } from './createNativeBridge'
 import type { BridgeClient, BridgeOperation, BridgeOperations } from './types'
 
 const iso = new URLSearchParams(window.location.search).has('visual') ? '2026-09-20T12:00:00.000Z' : new Date().toISOString()
@@ -99,7 +100,7 @@ export default function createMockBridge(): BridgeClient {
           const input = (payload as BridgeOperations['transactions.create']['payload']).transaction
           if (visualState === 'add-expense-create-error') {
             await new Promise((resolve) => window.setTimeout(resolve, 320))
-            throw new Error('Could not create transaction.')
+            throw new BridgeRequestError('MOCK_ERROR', 'Could not create transaction.', undefined, operation)
           }
           const transaction = { ...input, id: createRandomId(), createdAt: stamp(), updatedAt: stamp() }
           transactions = [transaction, ...transactions]; result = transaction; break
@@ -108,10 +109,10 @@ export default function createMockBridge(): BridgeClient {
           const update = payload as BridgeOperations['transactions.update']['payload']
           if (visualState === 'edit-transaction-update-error') {
             await new Promise((resolve) => window.setTimeout(resolve, 320))
-            throw new Error('Could not update transaction.')
+            throw new BridgeRequestError('MOCK_ERROR', 'Could not update transaction.', undefined, operation)
           }
           const old = transactions.find((item) => item.id === update.id)
-          if (!old) throw new Error('Transaction not found.')
+          if (!old) throw new BridgeRequestError('MOCK_ERROR', 'Transaction not found.', undefined, operation)
           const transaction = { ...old, ...update.transaction, updatedAt: stamp() }
           transactions = transactions.map((item) => item.id === update.id ? transaction : item); result = transaction; break
         }
@@ -119,7 +120,7 @@ export default function createMockBridge(): BridgeClient {
           const { id } = payload as BridgeOperations['transactions.delete']['payload']
           if (visualState === 'edit-transaction-delete-error') {
             await new Promise((resolve) => window.setTimeout(resolve, 320))
-            throw new Error('Could not delete transaction.')
+            throw new BridgeRequestError('MOCK_ERROR', 'Could not delete transaction.', undefined, operation)
           }
           transactions = transactions.filter((item) => item.id !== id); result = { id }; break
         }
@@ -132,7 +133,7 @@ export default function createMockBridge(): BridgeClient {
         case 'categories.update': {
           const update = payload as BridgeOperations['categories.update']['payload']
           const old = categories.find((item) => item.id === update.id)
-          if (!old || old.isDefault) throw new Error('Default categories cannot be changed.')
+          if (!old || old.isDefault) throw new BridgeRequestError('MOCK_ERROR', 'Default categories cannot be changed.', undefined, operation)
           const category = { ...old, ...update.category, updatedAt: stamp() }
           categories = categories.map((item) => item.id === update.id ? category : item); result = category; break
         }
@@ -149,7 +150,7 @@ export default function createMockBridge(): BridgeClient {
         case 'tags.update': {
           const update = payload as BridgeOperations['tags.update']['payload']
           const old = tags.find((item) => item.id === update.id)
-          if (!old) throw new Error('Tag not found.')
+          if (!old) throw new BridgeRequestError('MOCK_ERROR', 'Tag not found.', undefined, operation)
           const tag = { ...old, ...update.tag, updatedAt: stamp() }
           tags = tags.map((item) => item.id === update.id ? tag : item); result = tag; break
         }

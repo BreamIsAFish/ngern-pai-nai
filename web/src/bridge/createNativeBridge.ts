@@ -9,7 +9,7 @@ interface PendingRequest {
 }
 
 export class BridgeRequestError extends Error {
-  constructor(public readonly code: string, message: string, public readonly data?: unknown) {
+  constructor(public readonly code: string, message: string, public readonly data?: unknown, public readonly operation?: BridgeOperation) {
     super(message)
     this.name = 'BridgeRequestError'
   }
@@ -47,7 +47,7 @@ export default function createNativeBridge(): BridgeClient {
           code: response.error.code,
           message: response.error.message,
         })
-        request.reject(new BridgeRequestError(response.error.code, response.error.message, response.error.data))
+        request.reject(new BridgeRequestError(response.error.code, response.error.message, response.error.data, request.operation))
       }
     },
   }
@@ -72,7 +72,7 @@ export default function createNativeBridge(): BridgeClient {
           if (!pending.has(id)) return
           pending.delete(id)
           console.error(`[FlutterBridge] ${operation} timed out.`)
-          reject(new Error('The app did not respond. Please try again.'))
+          reject(new BridgeRequestError('TIMEOUT', 'The app did not respond. Please try again.', undefined, operation))
         }, timeoutMs)
       })
     },

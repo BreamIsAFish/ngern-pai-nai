@@ -37,7 +37,7 @@ describe('transactions.update', () => {
     const before = await bridge.request('transactions.list', { utcMonths })
     await expect(bridge.request('transactions.update', {
       id: 'missing', sourceUtcMonth: utcMonths[0], transaction: before.transactions[0],
-    })).rejects.toThrow('Transaction not found.')
+    })).rejects.toMatchObject({ name: 'BridgeRequestError', message: 'Transaction not found.', code: 'MOCK_ERROR', operation: 'transactions.update' })
     expect(await bridge.request('transactions.list', { utcMonths })).toEqual(before)
   })
 })
