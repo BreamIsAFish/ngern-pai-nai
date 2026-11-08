@@ -12,11 +12,12 @@ import Hamster from '../ui/Hamster'
 import isValidAmountInput from './isValidAmountInput'
 import { formatTags, parseTags, serializeTags, toggleTag } from '../tags/tagList'
 import { transactionTags } from './model'
+import changeTransactionType, { defaultTransactionCategory } from './changeTransactionType'
 
 interface Props { categories: Category[]; initialCategoryPickerOpen?: boolean; initialType?: TransactionType; tags: Tag[]; transaction?: Transaction; onCancel(): void; onSubmit(input: TransactionInput): void; onDelete?(): void; onManageCategories?(): void; onManageTags?(): void }
 
 export default function TransactionForm({ categories, initialCategoryPickerOpen = false, initialType = 'expense', tags, transaction, onCancel, onSubmit, onDelete, onManageCategories, onManageTags }: Props) {
-  const initialCategory = initialType === 'transfer' ? 'Transfer' : ''
+  const initialCategory = defaultTransactionCategory[initialType]
   const initial = transaction ? transactionToDraft(transaction) : { localDate: localDateValue(), localTime: localTimeValue(), type: initialType, category: initialCategory, tag: null, amount: 0, note: '', destination: null, transactionNumber: null, source: 'manual' as const, dateInferred: false }
   const [draft, setDraft] = useState<TransactionDraft>(initial)
   const [amount, setAmount] = useState(transaction ? String(transaction.amount) : '')
@@ -26,7 +27,7 @@ export default function TransactionForm({ categories, initialCategoryPickerOpen 
   const errors = submitted ? validateTransaction({ ...draft, amount: Number(amount) }) : {}
   const available = useMemo(() => categories.filter((item) => item.type === draft.type), [categories, draft.type])
   const selectedCategory = available.find((item) => item.name === draft.category)
-  const setType = (type: TransactionType) => setDraft((old) => ({ ...old, type, category: type === 'transfer' ? 'Transfer' : '', tag: type === 'transfer' ? null : old.tag }))
+  const setType = (type: TransactionType) => setDraft((old) => changeTransactionType({ draft: old, type, categories }))
   const submit = () => {
     const next = { ...draft, amount: Number(amount), category: draft.type === 'transfer' ? 'Transfer' : draft.category, dateInferred: draft.source === 'receipt_ai' ? false : draft.dateInferred }
     setSubmitted(true)
@@ -36,7 +37,7 @@ export default function TransactionForm({ categories, initialCategoryPickerOpen 
   const confirmDelete = () => { if (onDelete && window.confirm('Delete this transaction? This cannot be undone.')) onDelete() }
   return <main className="transaction-screen">
     <header className="entry-header"><button aria-label="Close" onClick={onCancel} type="button"><Icon name="close" size={22} /></button><strong>{transaction ? 'Edit entry' : 'New entry'}</strong>{transaction ? <div className="more-wrap"><button aria-label="More" onClick={() => setMenu(!menu)} type="button"><Icon name="more" size={24} /></button>{menu && <button className="delete-menu" onClick={confirmDelete} type="button">Delete transaction</button>}</div> : <span />}</header>
-    <div className="entry-tabs">{(['expense', 'income', 'transfer'] as const).map((type) => <button className={draft.type === type ? 'active' : ''} disabled={draft.source === 'receipt_ai' && type !== 'expense'} key={type} onClick={() => setType(type)} type="button">{type[0].toUpperCase() + type.slice(1)}</button>)}</div>
+    <div className="entry-tabs">{(['expense', 'income', 'transfer'] as const).map((type) => <button className={draft.type === type ? 'active' : ''} key={type} onClick={() => setType(type)} type="button">{type[0].toUpperCase() + type.slice(1)}</button>)}</div>
     <div className="entry-body">
       <label className={`amount-panel ${draft.type}`}><span>Amount</span><div><b>฿</b><input aria-invalid={Boolean(errors.amount)} aria-label="Amount" autoComplete="off" autoFocus inputMode="decimal" onChange={(event) => { if (isValidAmountInput(event.target.value)) setAmount(event.target.value) }} pattern="[0-9]*([.][0-9]{0,2})?" placeholder="0" required type="text" value={amount} /></div><Hamster className="amount-hamster" pose="seed" size={96} /></label>
       {errors.amount && <em className="field-error">{errors.amount}</em>}
@@ -45,9 +46,10 @@ export default function TransactionForm({ categories, initialCategoryPickerOpen 
         {errors.localDate && <em className="field-error">{errors.localDate}</em>}
         <label className="note-panel"><span>Note</span><input aria-invalid={Boolean(errors.note)} onChange={(event) => setDraft({ ...draft, note: event.target.value })} placeholder="Add note" value={draft.note} /></label>
         {errors.note && <em className="field-error">{errors.note}</em>}
+        {draft.type === 'transfer' && <label className="note-panel"><span>Destination</span><input onChange={(event) => setDraft({ ...draft, destination: event.target.value || null })} placeholder="Account or destination" value={draft.destination ?? ''} /></label>}
         {draft.type !== 'transfer' && <div className="entry-tags"><span>Tags</span><button aria-label="Choose tags" onClick={() => setCategoryPickerOpen(true)} type="button">{draft.tag ? formatTags(draft.tag) : '+ tag'}</button></div>}
         {draft.source === 'receipt_ai' && <>
-          <label className="note-panel"><span><Icon name="store" /></span><input onChange={(event) => setDraft({ ...draft, destination: event.target.value || null })} placeholder="ชื่อร้าน" value={draft.destination ?? ''} /></label>
+          {draft.type === 'expense' && <label className="note-panel"><span><Icon name="store" /></span><input onChange={(event) => setDraft({ ...draft, destination: event.target.value || null })} placeholder="ชื่อร้าน" value={draft.destination ?? ''} /></label>}
           <label className="note-panel"><span><Icon name="receipt" /></span><input onChange={(event) => setDraft({ ...draft, transactionNumber: event.target.value || null })} placeholder="เลขที่รายการ" value={draft.transactionNumber ?? ''} /></label>
           {draft.dateInferred && <p className="receipt-date-warning">วันที่เดิมอ่านไม่ได้ กรุณาตรวจสอบวันที่ก่อนบันทึก</p>}
         </>}

@@ -41,19 +41,34 @@ void main() {
       expect(transaction.dateInferred, isTrue);
     });
 
-    test('requires receipt imports to remain expenses', () {
-      expect(
-        () => TransactionInput.fromJson({
+    for (final type in ['income', 'transfer']) {
+      test('allows an existing receipt to become $type', () {
+        final transaction = TransactionInput.fromJson({
           'date': '2025-09-17',
           'time': '05:30:00',
-          'type': 'income',
+          'type': type,
           'amount': 120.5,
-          'category': null,
+          'category': type == 'income' ? 'Refunds' : 'Transfer',
           'source': 'receipt_ai',
-        }),
-        throwsFormatException,
-      );
-    });
+          'transactionNumber': 'TX-123',
+        });
+
+        expect(transaction.type.name, type);
+        expect(transaction.amount, 120.5);
+        expect(transaction.source, TransactionSource.receiptAi);
+        expect(transaction.transactionNumber, 'TX-123');
+        final record = TransactionRecord(
+          id: 'receipt-1',
+          input: transaction,
+          createdAt: DateTime.utc(2025, 9, 17),
+          updatedAt: DateTime.utc(2025, 9, 18),
+        );
+        final persisted = TransactionRecord.fromSheetRow(record.toSheetRow());
+        expect(persisted.id, 'receipt-1');
+        expect(persisted.input.type.name, type);
+        expect(persisted.input.source, TransactionSource.receiptAi);
+      });
+    }
 
     test('rejects zero amounts and missing categories', () {
       expect(

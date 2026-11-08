@@ -64,8 +64,6 @@ class TransactionInput {
         instant.isAfter(DateTime.now().toUtc()) ||
         amount == null ||
         amount <= 0 ||
-        (source == TransactionSource.receiptAi &&
-            type != TransactionType.expense) ||
         (type != TransactionType.transfer &&
             source == TransactionSource.manual &&
             category == null) ||
