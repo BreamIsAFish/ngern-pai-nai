@@ -119,11 +119,12 @@ class BridgeController {
       );
     } on MeowJotImportInvalid catch (error) {
       return _failure(requestId, 'IMPORT_INVALID', error.message);
-    } on FormatException {
+    } on FormatException catch (error) {
       return _failure(
         requestId,
         'INVALID_REQUEST',
         'Check the details and try again.',
+        data: {'type': error.runtimeType.toString(), 'message': error.toString()},
       );
     } catch (error, stackTrace) {
       if (kDebugMode) {
@@ -134,6 +135,7 @@ class BridgeController {
         requestId,
         'UNEXPECTED',
         'Something went wrong. Please try again.',
+        data: {'type': error.runtimeType.toString(), 'message': error.toString()},
       );
     }
   }
